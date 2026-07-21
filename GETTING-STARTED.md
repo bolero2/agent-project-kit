@@ -77,6 +77,7 @@ mv .claude/skills/<스킬이름>/SKILL.template.md .claude/skills/<스킬이름>
 
 ☐ CLAUDE.md §8 (완료/미완료 TODO) 현행화
 ☐ 확립된 **범용** 패턴이 있으면 킷(claude-project-kit)에도 반영 (다음 프로젝트 재사용)
+☐ 킷이 그간 갱신됐다면 `<킷>/bootstrap.sh --diff <이 프로젝트>`로 차이 확인 → 선별 반영
 ☐ 커밋 (푸시는 민감파일 스캔 후)
 
 ---
