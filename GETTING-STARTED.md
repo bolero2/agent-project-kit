@@ -7,23 +7,13 @@
 ## Phase 0 — 저장소 준비 (Claude 실행 전, 수동)
 
 ☐ 프로젝트 디렉토리 생성 + `git init` (또는 clone)
-☐ **킷 복사**:
+☐ **킷 복사** (이미 있는 파일은 덮어쓰지 않으므로 재실행 안전):
 ```bash
-cp    ~/claude-project-kit/CLAUDE.md   <프로젝트>/CLAUDE.md
-cp -r ~/claude-project-kit/.claude     <프로젝트>/.claude
+<킷 체크아웃 경로>/bootstrap.sh <프로젝트 경로>
+# 예: ~/main/github/claude-project-kit/bootstrap.sh ~/work/new-project
 ```
-☐ `.gitignore` 먼저 작성 — **데이터·모델·산출물·로그를 코드보다 먼저 막는다**:
-```gitignore
-# 민감/대용량 (프로젝트에 맞게 수정)
-dataset/
-input/
-output/
-*.onnx
-*.pt
-*.engine
-*.log
-*.mp4
-```
+☐ 복사된 `.gitignore` 베이스를 **프로젝트에 맞게 수정** — 데이터·모델·산출물·로그를
+   코드보다 먼저 막는다 (베이스에 비밀/자격증명·모델 가중치·언어별 섹션이 이미 있음)
 > 왜 먼저? 한 번이라도 커밋되면 히스토리에 남는다. 얼굴·개인정보 데이터는 특히.
 
 ---
@@ -43,13 +33,17 @@ output/
 
 ☐ **2. CLAUDE.md 직접 검토**
    - §0 RULE이 그대로 있는지
-   - §5 보안(유출 금지 경로)이 .gitignore와 일치하는지
+   - §0-4/§5 보안(유출 금지 경로)이 .gitignore와 일치하는지
    - 프로젝트 고유 규칙이 더 있으면 지금 §0에 추가 지시
 
-☐ **3. 첫 커밋**: `CLAUDE.md` + `.claude/` + `.gitignore`
+☐ **3. 권한 시드 검토** — `.claude/settings.json`
+   - §5의 민감 경로를 deny에 추가: `"Read(/<민감경로>/**)"`
+   - 프로젝트에서 자주 쓰는 읽기 전용 명령을 allow에 추가
+
+☐ **4. 첫 커밋**: `CLAUDE.md` + `.claude/` + `.gitignore` + `docs/`
    - 이게 첫 커밋이어야 이후 모든 세션·팀원이 규칙 위에서 시작한다
 
-☐ **4. (해당 시) 접근 수단 확인**
+☐ **5. (해당 시) 접근 수단 확인**
    - git 원격/계정, 사내 문서 접근, GPU/보드 등 — 안 되는 게 있으면 지금 확인
    - 토큰은 절대 파일·git config에 저장하지 않는다 (인라인 1회 사용 원칙)
 
@@ -58,8 +52,11 @@ output/
 ## Phase 2 — 작업 중 운영 규칙 (매 세션)
 
 ☐ **반복 지시 2회째 → 즉시 스킬화**
-   - `.claude/skills/_template/` 복사해서 절차를 박제
-   - "매번 같은 걸 지시 = 토큰 낭비"의 해결책
+```bash
+cp -r .claude/skills/_template .claude/skills/<스킬이름>
+mv .claude/skills/<스킬이름>/SKILL.template.md .claude/skills/<스킬이름>/SKILL.md
+```
+   - "매번 같은 걸 지시 = 토큰 낭비"의 해결책. 개명 전까지는 스킬로 등록되지 않는다.
 
 ☐ **새 규칙이 생기면 → 그 자리에서 CLAUDE.md §0에 추가**
    - "이건 중요하니까 규칙으로" 를 두 번 말하게 하지 않기
@@ -70,6 +67,8 @@ output/
 
 ☐ **문서/보고서 작성 시** (§0-2): 재현 명령어 4요소(전제·명령·출력해석·검증앵커) 필수
 
+☐ **의미 있는 작업 완료 시** → `docs/change-log/YYYY-MM-DD.md` 기록 + README 인덱스 갱신
+
 ☐ **git 잡일은 commit-push 에이전트에 위임** (메인 대화 토큰 절약)
 
 ---
@@ -77,7 +76,7 @@ output/
 ## Phase 3 — 세션/마일스톤 종료 시
 
 ☐ CLAUDE.md §8 (완료/미완료 TODO) 현행화
-☐ 확립된 **범용** 패턴이 있으면 `~/claude-project-kit/`에도 반영 (다음 프로젝트 재사용)
+☐ 확립된 **범용** 패턴이 있으면 킷(claude-project-kit)에도 반영 (다음 프로젝트 재사용)
 ☐ 커밋 (푸시는 민감파일 스캔 후)
 
 ---
@@ -85,8 +84,8 @@ output/
 ## 요약 한 장
 
 ```
-[수동]   git init → 킷 복사 → .gitignore
-[세션1]  /claude-md-init → 검토 → 첫 커밋(CLAUDE.md+.claude+.gitignore)
-[매세션] 반복지시→스킬화 / 새규칙→§0 / 반증→정정 기록
+[수동]   git init → bootstrap.sh → .gitignore 프로젝트에 맞게 수정
+[세션1]  /claude-md-init → CLAUDE.md·권한시드 검토 → 첫 커밋(CLAUDE.md+.claude+.gitignore+docs)
+[매세션] 반복지시→스킬화 / 새규칙→§0 / 반증→정정 기록 / change-log 기록
 [종료]   TODO 현행화 → 범용 패턴은 킷으로 역수출
 ```
