@@ -1,0 +1,32 @@
+# ── 비밀/자격증명 (절대 커밋 금지) ──────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+id_rsa*
+secrets/
+
+# ── 데이터/모델/산출물 (⚠️ 프로젝트에 맞게 수정 — CLAUDE.md §5와 일치시킬 것) ──
+dataset/
+input/
+output/
+*.onnx
+*.pt
+*.engine
+*.log
+*.mp4
+
+# ── Claude Code 개인 로컬 설정 (공유 금지) ──────────────
+.claude/settings.local.json
+
+# ── OS/에디터 잡동사니 ──────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── 언어별 (해당 시 주석 해제) ──────────────────────────
+# node_modules/
+# dist/
+# build/
+# __pycache__/
+# *.pyc
+# .venv/
