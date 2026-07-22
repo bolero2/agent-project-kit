@@ -15,8 +15,11 @@
 ### 0-2. 대상 프로젝트 격리 — 제품 불변식
 
 - 킷을 설치한 대상 프로젝트의 commit/push tree에는 킷 소유 파일이 들어가면 안 된다.
-- 대상의 tracked `AGENTS.md`, `CLAUDE.md`, `.gitignore`, 프로젝트 설정과 사용자 변경을
-  덮어쓰거나 자동 수정하지 않는다.
+- installer는 대상의 tracked tree를 절대 수정하지 않는다. 대상의 tracked `AGENTS.md`,
+  `CLAUDE.md`, `.gitignore`, 프로젝트 설정과 사용자 변경을 덮어쓰거나 자동 수정하지 않는다.
+- 공유 지침 문서(`AGENTS.md` canonical + `CLAUDE.md` 포인터)의 생성·병합은 installer가
+  아니라 셋업 스킬(`agent-kit-init`/`agent-kit-adopt`)이 사용자 인터뷰와 명시적 승인 하에
+  수행한다. 그 산출물은 사용자 소유 tracked 문서이며 commit/push가 허용된다.
 - 격리는 정확한 local exclude, manifest, pre-commit/pre-push guard, doctor로 방어한다.
   `git add -f`와 `--no-verify`를 고의로 함께 쓰는 관리자까지 막는다고 과장하지 않는다.
 - 글로벌 `~/.claude`, `~/.codex`, `~/.agents`는 읽기·수정하지 않는다. 모든 설치는 대상
@@ -86,6 +89,13 @@ AGENTS.md · CLAUDE.md        # 이 킷 저장소의 canonical 지침과 Claude 
   설치 후 사용자 변경이 있으면 전체 제거를 중단한다.
 - **Git config 순서 보존**: 선택 config의 EOF managed block과 Git 호환 lock을 사용하며,
   dispatcher는 현재 branch/include 문맥의 직전 hook을 동적으로 chain한다.
+- **공유 지침 문서는 스킬이 생성**: installer는 비대화형이므로 인터뷰가 필요한
+  `AGENTS.md`(canonical) + `CLAUDE.md`(포인터) 생성·병합은 첫 에이전트 세션의 셋업 스킬이
+  사용자 승인 하에 수행한다. installer의 "tracked tree 무수정" 불변식은 그대로 유지된다.
+- **manifest schema 이력 동결**: 배포 payload가 바뀌면 `SCHEMA_VERSION`을 올리고 과거
+  schema의 allowlist를 코드에 동결한다(`SCHEMA_SKILLS`/`SCHEMA_TEMPLATES`). 구버전 설치본은
+  기록된 schema로 검증한 뒤 재설치에서 managed exclude block만 교체하는 방식으로 업그레이드
+  하고, 제거도 구버전 원장 그대로 지원한다.
 - 자세한 출처·신뢰도 판정은 `docs/research/harness-engineering.md`에 기록한다.
 
 ## 4. 실행 방법
@@ -115,7 +125,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 | 이 저장소의 `payload/`, `scripts/`, docs, tests | agent-project-kit | 추적 |
 | 대상 worktree의 킷 어댑터·state | 설치 manifest | `info/exclude`, commit/push guard |
 | 대상 `$GIT_COMMON_DIR/agent-project-kit/` | 설치 manifest | worktree 밖, 로컬 전용 |
-| 대상의 기존 지침·설정·소스 | 사용자 프로젝트 | 수정 금지 |
+| 대상의 `AGENTS.md`·`CLAUDE.md` (셋업 스킬이 승인 하에 생성·병합) | 사용자 프로젝트 | 추적·commit 허용 |
+| 대상의 기존 지침·설정·소스 | 사용자 프로젝트 | 무단 수정 금지 |
 | 토큰·키·개인정보 | 사용자 | 외부 업로드·추적 금지 |
 
 ## 6. 외부 문서 맵
@@ -145,6 +156,10 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 - [x] README·architecture·change-log 현행화
 - [x] Claude Code와 Codex 실제 로딩 smoke test의 미검증 범위 기록
 - [x] GitHub 저장소를 `bolero2/agent-project-kit`으로 rename
+- [x] 공유 지침 문서 라이프사이클: 템플릿 배포 + init 인터뷰 생성 + adopt 병합 개편 절차
+- [x] 사용자 스킬 팬아웃(`agent-kit-skill-sync`)과 Agent 도구 레지스트리(CONTEXT)
+- [x] manifest schema v1→v2 업그레이드 경로와 회귀 테스트 78개 통과
+- [ ] init 인터뷰·adopt 병합·skill-sync의 실제 Claude Code/Codex 대화형 smoke test
 - 릴리스 단계에서 repository-local `bolero2` author로 `master`에 commit/push하고 CI를 확인한다.
 
 ## 9. 환경

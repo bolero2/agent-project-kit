@@ -85,3 +85,56 @@ GitHub Actions action pin은 GitHub API로 태그의 commit SHA와 대조했다.
 - Windows와 네트워크 파일시스템의 POSIX lock/권한 동작은 지원·검증하지 않았다.
 - local-only 파일은 다른 clone/원격 환경으로 전파되지 않으며 checkout마다 재설치해야 한다.
 - 권한 있는 사용자의 `git add -f` + 모든 `--no-verify` + hook 변경을 중앙 정책처럼 막지 않는다.
+
+## [ADD] 공유 지침 문서 라이프사이클 + 스킬 팬아웃 + schema 업그레이드 (kit 1.1.0)
+
+요구사항 검증에서 확인된 미충족 5개 항목(신규 시 `AGENTS.md`/`CLAUDE.md` 생성, 유저 인터뷰,
+기존 문서 병합 개편, 타 Agent 도구 수용, 유저 스킬 도구별 동기화)을 해소했다.
+
+- **불변식 정밀화** (`AGENTS.md` §0-2): "installer는 tracked tree 절대 무수정"은 유지하되,
+  공유 지침 문서의 생성·병합은 셋업 스킬이 사용자 인터뷰·명시적 승인 하에 수행하는 사용자
+  작업으로 정의했다. 산출물은 사용자 소유 tracked 문서로 commit 허용.
+- **템플릿 배포**: `payload/templates/AGENTS.template.md`(큰 그림 + 세부 규칙 TBD 구조)와
+  `CLAUDE.template.md`(`@AGENTS.md` 포인터 전용)를 `.agent-project-kit/templates/`에
+  local-only로 배포한다.
+- **`agent-kit-init` 개편**: 사용자 인터뷰(문제/목표/스택/성공 기준/사용 Agent 도구) →
+  템플릿 기반 초안 제시 → 승인 후 `AGENTS.md`+포인터 `CLAUDE.md` 생성 절차를 추가했다.
+- **`agent-kit-adopt` 개편**: "자동 병합 금지"를 "무단 병합 금지"로 바꾸고, 기존 규칙을
+  `AGENTS.md` 기준 canonical+포인터 구조로 병합하는 개편안을 diff로 제시 → 사용자 선택·승인
+  후 반영하는 절차를 추가했다.
+- **`agent-kit-skill-sync` 신설**: CONTEXT의 `선언된 Agent 도구` 목록(기본 Claude Code,
+  Codex — 그 외 도구는 사용자에게 확인 후 추가) 전체에 사용자 스킬 생성·수정·삭제를 동일
+  원본으로 동기화하고, 동작 검증 후 검증 산출물을 삭제하는 규칙.
+- **CONTEXT.md 공통 규칙 보강**: 근거+검증 의무(구체 수치·출처), 문서 수정=사용자 기능 변경
+  구분, 민감정보 구체 나열, 모델 효율 지침, 공유 지침 문서 절, Agent 도구 레지스트리.
+- **manifest schema v1→v2**: `SCHEMA_VERSION=2`와 schema 이력 동결(`SCHEMA_SKILLS`,
+  `SCHEMA_TEMPLATES`)을 도입했다. v1 manifest는 기록된 schema로 검증되고, 재설치 시 managed
+  exclude block만 v2로 교체하는 업그레이드가 수행되며(원본 prefix bytes 보존), v1 설치본의
+  직접 uninstall도 지원한다. `KIT_VERSION` 1.0.0 → 1.1.0.
+
+검증 (실행 명령과 결과):
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests
+# Ran 78 tests in 94.154s — OK (기존 70 + 신규 8)
+```
+
+신규 테스트: schema 이력 부분집합·미지원 version 거부·스킬 payload 구조(SchemaHistoryTests 4),
+v1 설치본의 in-place 업그레이드/직접 제거(SchemaMigrationTests 2), `AGENTS.md`/`CLAUDE.md`/
+사용자 스킬 commit이 guard를 통과하고 킷 경로는 0개, uninstall이 사용자 공유 문서를 보존
+(SharedDocumentCommitTests 2).
+
+미검증·한계:
+
+- init 인터뷰, adopt 병합 개편, skill-sync의 실제 Claude Code/Codex 대화형 플로우는 자동
+  테스트 범위 밖이다(스킬 본문의 구조 검증만 자동화). 실전 프로젝트 첫 적용 시 검증한다.
+- Claude Code/Codex 외 도구(예시: MY_AI)의 지침 파일 규약은 도구별 공식 문서 확인을 스킬
+  절차에 위임했고 킷이 자동 생성하지 않는다.
+- 기존 v1 설치본 업그레이드 시 mutable `CONTEXT.md`는 사용자 상태로 보존되므로 신규 공통
+  규칙(도구 레지스트리 등)은 자동 반영되지 않는다. doctor가 kit_version 불일치를 보고하며,
+  새 규칙 반영은 재설치 후 CONTEXT 수동 병합이 필요하다.
+
+파일: `payload/templates/`(신규 2), `payload/skills/agent-kit-skill-sync/`(신규),
+`payload/skills/agent-kit-init|adopt/SKILL.md`, `payload/runtime/CONTEXT.md`,
+`scripts/agent_project_kit.py`, `tests/test_harness.py`, `AGENTS.md`, `README.md`,
+`GETTING-STARTED.md`, `docs/architecture.md`

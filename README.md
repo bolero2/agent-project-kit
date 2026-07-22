@@ -4,9 +4,14 @@ Claude Code와 Codex가 같은 프로젝트에서 교대 작업할 수 있게 �
 신규 프로젝트의 초기 setup과 진행 중인 프로젝트의 무손상 편입을 지원한다.
 
 설치된 규칙·스킬·handoff·훅은 대상 프로젝트에서만 작동하며, 정상적인
-`git add -A → commit → push` 흐름의 commit tree에는 들어가지 않는다. 대상의 기존
-`AGENTS.md`, `CLAUDE.md`, `.gitignore`, 소스와 provider tool config는 덮어쓰지 않는다.
+`git add -A → commit → push` 흐름의 commit tree에는 들어가지 않는다. installer는 대상의
+기존 `AGENTS.md`, `CLAUDE.md`, `.gitignore`, 소스와 provider tool config를 덮어쓰지 않는다.
 Git의 추적 밖 local/worktree config에는 guard 활성화를 위한 명시적 managed block만 추가한다.
+
+공유 지침 문서는 설치 후 첫 에이전트 세션이 만든다: `agent-kit-init`이 사용자 인터뷰로
+프로젝트 큰 그림을 담은 `AGENTS.md`(canonical)와 이를 가리키는 포인터 `CLAUDE.md`를 승인
+하에 생성하고, `agent-kit-adopt`는 기존 두 파일의 규칙을 승인 하에 `AGENTS.md` 기준으로
+병합 개편한다. 이 두 파일은 사용자 소유 tracked 문서로 commit/push가 허용된다.
 
 > 자세한 순서: [GETTING-STARTED.md](GETTING-STARTED.md)
 >
@@ -69,10 +74,13 @@ git -C my-project init
 프로젝트에서 Claude Code 또는 Codex를 열고 다음처럼 요청한다.
 
 ```text
-agent-kit-init 스킬로 이 프로젝트의 로컬 컨텍스트와 첫 handoff를 완성해 줘.
+agent-kit-init 스킬로 프로젝트 인터뷰를 진행해서 AGENTS.md와 포인터 CLAUDE.md를 만들고,
+로컬 컨텍스트와 첫 handoff를 완성해 줘.
 ```
 
-프로젝트 소스와 프로젝트 고유 문서만 평소처럼 commit한다. 킷 setup 자체를 commit하지 않는다.
+에이전트가 프로젝트의 목적·스택·성공 기준·사용할 Agent 도구를 인터뷰한 뒤, 승인을 받아
+`AGENTS.md`/`CLAUDE.md`를 생성한다. 이 두 파일과 프로젝트 소스는 평소처럼 commit한다.
+킷 setup 자체(로컬 하네스 파일)는 commit하지 않는다.
 
 ### 진행 중인 프로젝트 편입
 
@@ -83,7 +91,8 @@ agent-kit-init 스킬로 이 프로젝트의 로컬 컨텍스트와 첫 handoff�
 그 프로젝트의 Claude Code 또는 Codex 세션에서 다음처럼 요청한다.
 
 ```text
-agent-kit-adopt 스킬로 현재 규칙, Git 상태, 실행·검증 방법을 로컬 하네스에 편입해 줘.
+agent-kit-adopt 스킬로 현재 규칙, Git 상태, 실행·검증 방법을 로컬 하네스에 편입하고,
+기존 AGENTS.md/CLAUDE.md가 있으면 AGENTS.md 기준 canonical+포인터 구조로 병합 개편안을 제시해 줘.
 ```
 
 편입은 기존 dirty/staged/untracked 사용자 상태를 보존한다. owned adapter 경로에 기존 파일이나
@@ -148,6 +157,7 @@ flowchart LR
 | `.agent-project-kit/CONTEXT.md` | 짧은 공통 규칙과 컨텍스트 로딩 순서 |
 | `.agent-project-kit/HANDOFF.md` | Claude/Codex가 공유하는 활성 작업 상태 |
 | `.agent-project-kit/hooks/guard.py` | 두 도구가 호출하는 공통 안전 검사 |
+| `.agent-project-kit/templates/*.template.md` | init/adopt가 쓰는 `AGENTS.md`·`CLAUDE.md` 템플릿 |
 | `AGENTS.override.md` | Codex가 공통 컨텍스트와 기존 `AGENTS.md`를 읽게 하는 얇은 어댑터 |
 | `CLAUDE.local.md` | Claude Code가 공통 컨텍스트를 읽게 하는 얇은 어댑터 |
 | `.agents/skills/agent-kit-*/SKILL.md` | Codex용 공식 project skill 경로 |
@@ -194,10 +204,11 @@ worktree scope를 명시한 뒤 linked worktree에 설치할 수 있다. 설치 
 
 | 스킬 | 언제 쓰나 | 하는 일 |
 |---|---|---|
-| `agent-kit-init` | 신규 프로젝트 첫 세션 | 저장소를 탐색하고 안정적 사실·검증 기준을 `CONTEXT/HANDOFF`에 채움 |
-| `agent-kit-adopt` | 진행 중 프로젝트 편입 | 기존 지침·결정·dirty 상태를 보존하며 현재 컨텍스트를 요약 |
+| `agent-kit-init` | 신규 프로젝트 첫 세션 | 사용자 인터뷰로 `AGENTS.md`+포인터 `CLAUDE.md`를 승인 하에 생성하고 `CONTEXT/HANDOFF`를 채움 |
+| `agent-kit-adopt` | 진행 중 프로젝트 편입 | 기존 지침을 보존·요약하고, 승인 하에 `AGENTS.md` 기준 canonical+포인터 구조로 병합 개편 |
 | `agent-kit-handoff` | 도구/세션 교대 직전 | Git·검증·실패·다음 행동을 공통 handoff에 기록 |
 | `agent-kit-wrap-up` | 세션/마일스톤 종료 | 완료 이력을 압축하고 검증·미완료 작업·다음 행동을 현행화 |
+| `agent-kit-skill-sync` | 사용자 스킬 생성·수정·삭제 | 선언된 모든 Agent 도구 경로에 동일 원본으로 반영하고 동작 검증 후 산출물 정리 |
 
 두 provider 디렉터리의 스킬은 같은 payload에서 복사되고 테스트로 parity를 확인한다. 기본
 이름을 `agent-kit-*`으로 namespace해 글로벌/bundled skill과 충돌하지 않게 한다.
@@ -218,6 +229,10 @@ enterprise → personal → project 순이며 이 세 범위의 스킬은 bundle
 - 전체 로그 대신 실패 원인과 검증 anchor를 남긴다.
 - 작업 중 프로젝트 문서를 수정하는 것은 사용자 기능 변경이며 setup과 구분한다.
 - 민감정보를 대화, 명령 인자, URL, Git config 또는 추적 파일에 넣지 않는다.
+- 모든 행위에 근거와 검증 과정을 붙인다. 보고서에는 실행 명령·구체 수치·출처를 기재한다.
+- 규칙은 `AGENTS.md`에만 기술하고 `CLAUDE.md`는 포인터로 유지한다.
+- 사용자 스킬은 선언된 Agent 도구 목록(기본: Claude Code, Codex — 그 외는 사용자에게 확인)
+  전체에 생성·수정·삭제를 동기화한다.
 
 ### 도구 훅
 

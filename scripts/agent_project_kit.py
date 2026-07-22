@@ -24,7 +24,7 @@ from typing import Callable, Iterable
 
 
 KIT_NAME = "agent-project-kit"
-KIT_VERSION = "1.0.0"
+KIT_VERSION = "1.1.0"
 BLOCK_START = "# >>> agent-project-kit managed (local-only; do not edit)"
 BLOCK_END = "# <<< agent-project-kit managed"
 HOOK_CONFIG_START = "# >>> agent-project-kit core.hooksPath (managed; do not edit)"
@@ -59,7 +59,18 @@ HOOK_NAMES = (
     "post-update",
     "push-to-checkout",
 )
-SKILLS = ("init", "adopt", "handoff", "wrap-up")
+# Owned-path schema history. Every shipped schema version is frozen here so a
+# manifest written by an older kit can still be validated, upgraded in place,
+# and uninstalled without trusting the manifest's own allowlists.
+SCHEMA_VERSION = 2
+SCHEMA_SKILLS: dict[int, tuple[str, ...]] = {
+    1: ("init", "adopt", "handoff", "wrap-up"),
+    2: ("init", "adopt", "handoff", "wrap-up", "skill-sync"),
+}
+SCHEMA_TEMPLATES: dict[int, tuple[str, ...]] = {
+    1: (),
+    2: ("AGENTS.template.md", "CLAUDE.template.md"),
+}
 MUTABLE_PATHS = {
     ".agent-project-kit/CONTEXT.md",
     ".agent-project-kit/HANDOFF.md",
@@ -69,7 +80,15 @@ LOCK_MAGIC = b"agent-project-kit common-dir lock v1\n"
 MIN_GIT_VERSION = (2, 31)
 
 
-def payload_map() -> dict[str, str]:
+def resolve_schema_version(version: int | None) -> int:
+    resolved = SCHEMA_VERSION if version is None else version
+    if resolved not in SCHEMA_SKILLS:
+        raise RuntimeError(f"지원하지 않는 manifest schema version입니다: {resolved}")
+    return resolved
+
+
+def payload_map(version: int | None = None) -> dict[str, str]:
+    version = resolve_schema_version(version)
     mapping = {
         "runtime/AGENTS.override.md": "AGENTS.override.md",
         "runtime/CLAUDE.local.md": "CLAUDE.local.md",
@@ -79,7 +98,9 @@ def payload_map() -> dict[str, str]:
         "runtime/codex-hooks.json": ".codex/hooks.json",
         "hooks/guard.py": ".agent-project-kit/hooks/guard.py",
     }
-    for skill in SKILLS:
+    for name in SCHEMA_TEMPLATES[version]:
+        mapping[f"templates/{name}"] = f".agent-project-kit/templates/{name}"
+    for skill in SCHEMA_SKILLS[version]:
         source = f"skills/agent-kit-{skill}/SKILL.md"
         mapping[f"{source}::agents"] = f".agents/skills/agent-kit-{skill}/SKILL.md"
         mapping[f"{source}::claude"] = f".claude/skills/agent-kit-{skill}/SKILL.md"
@@ -106,7 +127,9 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def run_git(root: Path, *args: str, check: bool = True, input_data: bytes | None = None) -> subprocess.CompletedProcess[bytes]:
+def run_git(
+    root: Path, *args: str, check: bool = True, input_data: bytes | None = None
+) -> subprocess.CompletedProcess[bytes]:
     process = subprocess.run(
         ["git", "-C", str(root), *args],
         input=input_data,
@@ -152,7 +175,9 @@ def find_repository(requested: str) -> tuple[Path, Path]:
     candidate = candidate.resolve()
     probe = run_git(candidate, "rev-parse", "--is-inside-work-tree", check=False)
     if probe.returncode != 0 or probe.stdout.strip() != b"true":
-        raise RuntimeError("agent-project-kit은 Git worktree에서만 설치할 수 있습니다 (먼저 git init).")
+        raise RuntimeError(
+            "agent-project-kit은 Git worktree에서만 설치할 수 있습니다 (먼저 git init)."
+        )
     root = Path(git_text(candidate, "rev-parse", "--show-toplevel")).resolve()
     common = Path(
         git_text(root, "rev-parse", "--path-format=absolute", "--git-common-dir")
@@ -183,16 +208,22 @@ def common_directory_lock(common: Path, *, create: bool) -> Iterable[None]:
         else:
             descriptor = os.open(lock_path, base_flags)
     except OSError as error:
-        raise RuntimeError(f"킷 lock을 안전하게 열 수 없습니다: {lock_path}: {error}") from error
+        raise RuntimeError(
+            f"킷 lock을 안전하게 열 수 없습니다: {lock_path}: {error}"
+        ) from error
     try:
         with os.fdopen(descriptor, "r+b", closefd=True) as stream:
             if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
-                raise RuntimeError(f"킷 lock 경로가 regular file이 아닙니다: {lock_path}")
+                raise RuntimeError(
+                    f"킷 lock 경로가 regular file이 아닙니다: {lock_path}"
+                )
             fcntl.flock(stream.fileno(), fcntl.LOCK_EX if create else fcntl.LOCK_SH)
             stream.seek(0)
             content = stream.read()
             if content and content != LOCK_MAGIC:
-                raise RuntimeError(f"킷 lock 경로가 기존 파일과 충돌합니다: {lock_path}")
+                raise RuntimeError(
+                    f"킷 lock 경로가 기존 파일과 충돌합니다: {lock_path}"
+                )
             if not content and created:
                 stream.seek(0)
                 stream.write(LOCK_MAGIC)
@@ -243,7 +274,9 @@ def file_matches_state(path: Path, state: tuple[bool, bytes, int]) -> bool:
 
 def capture_file_state(path: Path) -> tuple[bool, bytes, int]:
     if path.is_symlink():
-        raise RuntimeError(f"심볼릭 링크 파일은 소유권 snapshot으로 사용하지 않습니다: {path}")
+        raise RuntimeError(
+            f"심볼릭 링크 파일은 소유권 snapshot으로 사용하지 않습니다: {path}"
+        )
     if not path.exists():
         return (False, b"", 0o644)
     if not path.is_file():
@@ -308,7 +341,9 @@ def atomic_write_git_config(
     replaced = False
     try:
         if not file_matches_state(path, expected):
-            raise RuntimeError(f"동시 변경을 감지해 Git config를 덮어쓰지 않습니다: {path}")
+            raise RuntimeError(
+                f"동시 변경을 감지해 Git config를 덮어쓰지 않습니다: {path}"
+            )
         stream = os.fdopen(descriptor, "wb")
         descriptor = -1
         with stream:
@@ -317,7 +352,9 @@ def atomic_write_git_config(
             os.fsync(stream.fileno())
             os.fchmod(stream.fileno(), mode)
         if not file_matches_state(path, expected):
-            raise RuntimeError(f"동시 변경을 감지해 Git config를 덮어쓰지 않습니다: {path}")
+            raise RuntimeError(
+                f"동시 변경을 감지해 Git config를 덮어쓰지 않습니다: {path}"
+            )
         os.replace(lock_path, path)
         replaced = True
     finally:
@@ -330,9 +367,7 @@ def atomic_write_git_config(
                 pass
 
 
-def unlink_git_config(
-    path: Path, expected: tuple[bool, bytes, int]
-) -> None:
+def unlink_git_config(path: Path, expected: tuple[bool, bytes, int]) -> None:
     if not expected[0]:
         return
     lock_path = git_config_lock_path(path)
@@ -345,7 +380,9 @@ def unlink_git_config(
         ) from error
     try:
         if not file_matches_state(path, expected):
-            raise RuntimeError(f"동시 변경을 감지해 Git config를 삭제하지 않습니다: {path}")
+            raise RuntimeError(
+                f"동시 변경을 감지해 Git config를 삭제하지 않습니다: {path}"
+            )
         path.unlink()
     finally:
         os.close(descriptor)
@@ -426,7 +463,9 @@ def read_manifest_state(
 ) -> dict | None:
     if not state[0]:
         if required:
-            raise RuntimeError("설치 manifest가 없습니다. 먼저 install/adopt를 실행하세요.")
+            raise RuntimeError(
+                "설치 manifest가 없습니다. 먼저 install/adopt를 실행하세요."
+            )
         return None
     if path.parent.is_symlink():
         raise RuntimeError(f"manifest가 심볼릭 링크입니다: {path}")
@@ -488,30 +527,42 @@ def validate_manifest(value: object, path: Path) -> None:
     }
     if not isinstance(value, dict) or set(value) != expected_keys:
         raise RuntimeError("지원하지 않거나 손상된 manifest 형식입니다.")
-    if value.get("schema_version") != 1 or value.get("kit") != KIT_NAME:
+    if value.get("schema_version") not in SCHEMA_SKILLS or value.get("kit") != KIT_NAME:
         raise RuntimeError("지원하지 않는 manifest schema 또는 kit입니다.")
+    manifest_version = value["schema_version"]
     if not isinstance(value.get("kit_version"), str) or not value["kit_version"]:
         raise RuntimeError("manifest kit_version 형식이 잘못되었습니다.")
     if value.get("install_mode") not in {"install", "adopt"}:
         raise RuntimeError("manifest install_mode 형식이 잘못되었습니다.")
     for field in ("worktree_root", "git_common_dir"):
         raw = value.get(field)
-        if not isinstance(raw, str) or not raw or "\x00" in raw or not Path(raw).is_absolute():
+        if (
+            not isinstance(raw, str)
+            or not raw
+            or "\x00" in raw
+            or not Path(raw).is_absolute()
+        ):
             raise RuntimeError(f"manifest {field} 형식이 잘못되었습니다.")
     if value["git_common_dir"] != str(path.parent.parent):
         raise RuntimeError("manifest git_common_dir가 실제 위치와 다릅니다.")
 
-    expected_owned = owned_paths()
+    expected_owned = owned_paths(manifest_version)
     expected_mutable = sorted(MUTABLE_PATHS)
     expected_immutable = set(expected_owned) - MUTABLE_PATHS
     if value.get("owned_paths") != expected_owned:
-        raise RuntimeError("manifest owned_paths allowlist가 현재 schema와 다릅니다.")
+        raise RuntimeError("manifest owned_paths allowlist가 기록된 schema와 다릅니다.")
     if value.get("owned_prefixes") != owned_prefixes():
-        raise RuntimeError("manifest owned_prefixes allowlist가 현재 schema와 다릅니다.")
+        raise RuntimeError(
+            "manifest owned_prefixes allowlist가 기록된 schema와 다릅니다."
+        )
     if value.get("mutable_paths") != expected_mutable:
-        raise RuntimeError("manifest mutable_paths allowlist가 현재 schema와 다릅니다.")
-    if value.get("exclude_lines") != exclude_lines():
-        raise RuntimeError("manifest exclude_lines allowlist가 현재 schema와 다릅니다.")
+        raise RuntimeError(
+            "manifest mutable_paths allowlist가 기록된 schema와 다릅니다."
+        )
+    if value.get("exclude_lines") != exclude_lines(manifest_version):
+        raise RuntimeError(
+            "manifest exclude_lines allowlist가 기록된 schema와 다릅니다."
+        )
     exclude = value.get("exclude")
     expected_exclude_keys = {
         "original_existed",
@@ -545,13 +596,16 @@ def validate_manifest(value: object, path: Path) -> None:
     if exclude["installed_mode"] != exclude["original_mode"]:
         raise RuntimeError("manifest exclude mode 복원 정보가 일관되지 않습니다.")
     if not exclude["original_existed"] and (
-        exclude["original_size"] != 0
-        or exclude["original_sha256"] != sha256_bytes(b"")
+        exclude["original_size"] != 0 or exclude["original_sha256"] != sha256_bytes(b"")
     ):
         raise RuntimeError("manifest exclude 비존재 원본 정보가 일관되지 않습니다.")
-    validate_hash_map("mutable_files", value.get("mutable_files"), set(expected_mutable))
+    validate_hash_map(
+        "mutable_files", value.get("mutable_files"), set(expected_mutable)
+    )
     validate_hash_map("worktree_files", value.get("worktree_files"), expected_immutable)
-    validate_hash_map("common_files", value.get("common_files"), set(common_owned_paths()))
+    validate_hash_map(
+        "common_files", value.get("common_files"), set(common_owned_paths())
+    )
 
     git = value.get("git")
     expected_git_keys = {
@@ -572,9 +626,12 @@ def validate_manifest(value: object, path: Path) -> None:
         raise RuntimeError("manifest previous_local_hooks_paths 형식이 잘못되었습니다.")
     previous_worktree_values = git.get("previous_worktree_hooks_paths")
     if not isinstance(previous_worktree_values, list) or not all(
-        isinstance(item, str) and "\x00" not in item for item in previous_worktree_values
+        isinstance(item, str) and "\x00" not in item
+        for item in previous_worktree_values
     ):
-        raise RuntimeError("manifest previous_worktree_hooks_paths 형식이 잘못되었습니다.")
+        raise RuntimeError(
+            "manifest previous_worktree_hooks_paths 형식이 잘못되었습니다."
+        )
     previous_dir = git.get("previous_effective_hooks_dir")
     if (
         not isinstance(previous_dir, str)
@@ -582,7 +639,9 @@ def validate_manifest(value: object, path: Path) -> None:
         or "\x00" in previous_dir
         or not Path(previous_dir).is_absolute()
     ):
-        raise RuntimeError("manifest previous_effective_hooks_dir 형식이 잘못되었습니다.")
+        raise RuntimeError(
+            "manifest previous_effective_hooks_dir 형식이 잘못되었습니다."
+        )
     if git.get("installed_hooks_path") != str(path.parent / "hooks"):
         raise RuntimeError("manifest installed_hooks_path가 실제 위치와 다릅니다.")
     if git.get("installed_hooks_scope") not in {"local", "worktree"}:
@@ -616,7 +675,9 @@ def validate_manifest(value: object, path: Path) -> None:
     ):
         raise RuntimeError("manifest installed_config path 형식이 잘못되었습니다.")
     if not isinstance(installed_config.get("original_existed"), bool):
-        raise RuntimeError("manifest installed_config original_existed 형식이 잘못되었습니다.")
+        raise RuntimeError(
+            "manifest installed_config original_existed 형식이 잘못되었습니다."
+        )
     for field in ("original_mode", "installed_mode", "original_size"):
         item = installed_config.get(field)
         if (
@@ -625,7 +686,9 @@ def validate_manifest(value: object, path: Path) -> None:
             or item < 0
             or (field.endswith("mode") and item > 0o7777)
         ):
-            raise RuntimeError(f"manifest installed_config {field} 형식이 잘못되었습니다.")
+            raise RuntimeError(
+                f"manifest installed_config {field} 형식이 잘못되었습니다."
+            )
     for field in ("original_sha256", "installed_sha256"):
         digest = installed_config.get(field)
         if (
@@ -633,14 +696,20 @@ def validate_manifest(value: object, path: Path) -> None:
             or len(digest) != 64
             or any(character not in "0123456789abcdef" for character in digest)
         ):
-            raise RuntimeError(f"manifest installed_config {field} 형식이 잘못되었습니다.")
+            raise RuntimeError(
+                f"manifest installed_config {field} 형식이 잘못되었습니다."
+            )
     if installed_config["installed_mode"] != installed_config["original_mode"]:
-        raise RuntimeError("manifest installed_config mode 복원 정보가 일관되지 않습니다.")
+        raise RuntimeError(
+            "manifest installed_config mode 복원 정보가 일관되지 않습니다."
+        )
     if not installed_config["original_existed"] and (
         installed_config["original_size"] != 0
         or installed_config["original_sha256"] != sha256_bytes(b"")
     ):
-        raise RuntimeError("manifest installed_config 비존재 원본 정보가 일관되지 않습니다.")
+        raise RuntimeError(
+            "manifest installed_config 비존재 원본 정보가 일관되지 않습니다."
+        )
 
 
 def load_payload(payload: Path) -> dict[str, bytes]:
@@ -648,7 +717,9 @@ def load_payload(payload: Path) -> dict[str, bytes]:
     actual = {
         item.relative_to(payload).as_posix()
         for item in payload.rglob("*")
-        if item.is_file() and item.name != ".DS_Store" and "__pycache__" not in item.parts
+        if item.is_file()
+        and item.name != ".DS_Store"
+        and "__pycache__" not in item.parts
     }
     missing = sorted(expected - actual)
     unexpected = sorted(actual - expected)
@@ -662,8 +733,8 @@ def load_payload(payload: Path) -> dict[str, bytes]:
     return {rel: (payload / rel).read_bytes() for rel in sorted(expected)}
 
 
-def owned_paths() -> list[str]:
-    return sorted(set(payload_map().values()))
+def owned_paths(version: int | None = None) -> list[str]:
+    return sorted(set(payload_map(version).values()))
 
 
 def owned_prefixes() -> list[str]:
@@ -683,7 +754,8 @@ def expected_common_mode(rel: str) -> int:
     return 0o755
 
 
-def exclude_lines() -> list[str]:
+def exclude_lines(version: int | None = None) -> list[str]:
+    version = resolve_schema_version(version)
     lines = ["/.agent-project-kit/", "/AGENTS.override.md", "/CLAUDE.local.md"]
     lines.extend(
         [
@@ -691,23 +763,27 @@ def exclude_lines() -> list[str]:
             "/.codex/hooks.json",
         ]
     )
-    for skill in SKILLS:
+    for skill in SCHEMA_SKILLS[version]:
         lines.append(f"/.agents/skills/agent-kit-{skill}/")
         lines.append(f"/.claude/skills/agent-kit-{skill}/")
     return lines
 
 
-def expected_exclude_block() -> str:
-    return "\n".join([BLOCK_START, *exclude_lines(), BLOCK_END])
+def expected_exclude_block(version: int | None = None) -> str:
+    return "\n".join([BLOCK_START, *exclude_lines(version), BLOCK_END])
 
 
-def append_managed_block(original: bytes) -> bytes:
+def append_managed_block(original: bytes, version: int | None = None) -> bytes:
     start = BLOCK_START.encode("utf-8")
     end = BLOCK_END.encode("utf-8")
     if start in original or end in original:
-        raise RuntimeError("info/exclude에 기존 managed marker가 있어 자동 수정하지 않습니다.")
+        raise RuntimeError(
+            "info/exclude에 기존 managed marker가 있어 자동 수정하지 않습니다."
+        )
     separator = b"" if not original or original.endswith(b"\n") else b"\n"
-    return original + separator + expected_exclude_block().encode("utf-8") + b"\n"
+    return (
+        original + separator + expected_exclude_block(version).encode("utf-8") + b"\n"
+    )
 
 
 def tracked_owned(root: Path) -> list[str]:
@@ -733,7 +809,9 @@ def reserved_collisions(root: Path, old: dict | None) -> list[str]:
     if local_root.exists() or local_root.is_symlink():
         if local_root.is_dir() and not local_root.is_symlink():
             candidates.extend(
-                item for item in local_root.rglob("*") if not item.is_dir() or item.is_symlink()
+                item
+                for item in local_root.rglob("*")
+                if not item.is_dir() or item.is_symlink()
             )
         else:
             candidates.append(local_root)
@@ -745,7 +823,9 @@ def reserved_collisions(root: Path, old: dict | None) -> list[str]:
                     continue
                 if child.is_dir() and not child.is_symlink():
                     candidates.extend(
-                        item for item in child.rglob("*") if not item.is_dir() or item.is_symlink()
+                        item
+                        for item in child.rglob("*")
+                        if not item.is_dir() or item.is_symlink()
                     )
                 else:
                     candidates.append(child)
@@ -791,10 +871,7 @@ def hook_values(root: Path, scope: str) -> list[str]:
     if result.returncode != 0:
         raise RuntimeError(result.stderr.decode("utf-8", "replace").strip())
     raw_values = result.stdout[:-1] if result.stdout.endswith(b"\0") else result.stdout
-    return [
-        item.decode("utf-8", "surrogateescape")
-        for item in raw_values.split(b"\0")
-    ]
+    return [item.decode("utf-8", "surrogateescape") for item in raw_values.split(b"\0")]
 
 
 def previous_local_hook_values(root: Path) -> list[str]:
@@ -820,7 +897,9 @@ def worktree_config_enabled(root: Path) -> bool:
 def current_hook_state(root: Path) -> dict[str, list[str]]:
     return {
         "local": hook_values(root, "local"),
-        "worktree": hook_values(root, "worktree") if worktree_config_enabled(root) else [],
+        "worktree": hook_values(root, "worktree")
+        if worktree_config_enabled(root)
+        else [],
     }
 
 
@@ -1002,7 +1081,7 @@ def dispatcher_files(common_root: Path, previous_hooks: Path) -> dict[str, bytes
     result = {"dispatcher.py": DISPATCHER_SOURCE.encode("utf-8")}
     invocation = shlex.quote(str(common_root / "dispatcher.py"))
     for hook in HOOK_NAMES:
-        body = f"#!/bin/sh\nexec python3 {invocation} {shlex.quote(hook)} \"$@\"\n"
+        body = f'#!/bin/sh\nexec python3 {invocation} {shlex.quote(hook)} "$@"\n'
         result[f"hooks/{hook}"] = body.encode("utf-8")
     return result
 
@@ -1047,10 +1126,9 @@ def ensure_installable(
                 continue
             if not expected_old:
                 raise RuntimeError(f"기존 로컬 파일과 충돌합니다(덮어쓰지 않음): {rel}")
-            if (
-                sha256_bytes(state[1]) != expected_old
-                or state[2] != expected_worktree_mode(rel)
-            ):
+            if sha256_bytes(state[1]) != expected_old or state[
+                2
+            ] != expected_worktree_mode(rel):
                 raise RuntimeError(f"설치 후 사용자가 수정한 파일입니다(보존): {rel}")
     common_parent = common_root.parent
     if common_root.is_symlink():
@@ -1063,10 +1141,9 @@ def ensure_installable(
             expected_old = old_common.get(rel)
             if not expected_old:
                 raise RuntimeError(f"기존 Git metadata와 충돌합니다: {path}")
-            if (
-                sha256_bytes(state[1]) != expected_old
-                or state[2] != expected_common_mode(rel)
-            ):
+            if sha256_bytes(state[1]) != expected_old or state[
+                2
+            ] != expected_common_mode(rel):
                 raise RuntimeError(f"수정된 Git metadata를 덮어쓰지 않습니다: {path}")
 
 
@@ -1115,7 +1192,11 @@ def unquote_git_path(value: bytes) -> bytes:
             continue
         if ord("0") <= escaped <= ord("7"):
             end = index
-            while end < len(source) and end < index + 3 and ord("0") <= source[end] <= ord("7"):
+            while (
+                end < len(source)
+                and end < index + 3
+                and ord("0") <= source[end] <= ord("7")
+            ):
                 end += 1
             result.append(int(source[index:end], 8))
             index = end
@@ -1137,18 +1218,20 @@ def parse_worktree_porcelain(data: bytes, *, nul: bool) -> list[tuple[str, bool]
         raw_path = worktree_fields[0][len(b"worktree ") :]
         if not nul:
             raw_path = unquote_git_path(raw_path)
-        result.append(
-            (raw_path.decode("utf-8", "surrogateescape"), b"bare" in fields)
-        )
+        result.append((raw_path.decode("utf-8", "surrogateescape"), b"bare" in fields))
     return result
 
 
 def repository_worktree_roots(root: Path) -> tuple[list[Path], list[Path]]:
     nul = installed_git_version() >= (2, 42)
-    args = ("worktree", "list", "--porcelain", "-z") if nul else (
-        "worktree",
-        "list",
-        "--porcelain",
+    args = (
+        ("worktree", "list", "--porcelain", "-z")
+        if nul
+        else (
+            "worktree",
+            "list",
+            "--porcelain",
+        )
     )
     result = run_git(root, *args)
     worktrees: list[Path] = []
@@ -1206,7 +1289,9 @@ def sibling_worktree_collisions(root: Path, worktrees: Iterable[Path]) -> list[s
 def ensure_all_ignored(root: Path) -> None:
     visible: list[str] = []
     for rel in owned_paths():
-        result = run_git(root, "check-ignore", "-q", "--no-index", "--", rel, check=False)
+        result = run_git(
+            root, "check-ignore", "-q", "--no-index", "--", rel, check=False
+        )
         if result.returncode == 1:
             visible.append(rel)
         elif result.returncode not in {0, 1}:
@@ -1242,9 +1327,7 @@ def restore_files(
         try:
             if existed:
                 if path in protected_configs:
-                    atomic_write_git_config(
-                        path, content, mode, expected=post_state
-                    )
+                    atomic_write_git_config(path, content, mode, expected=post_state)
                 else:
                     atomic_write(path, content, mode, expected=post_state)
             elif post_state[0]:
@@ -1285,6 +1368,7 @@ def install(kit_root: Path, root: Path, common: Path, mode: str) -> int:
     backup_paths_list.extend(config_paths.values())
     backups = backup_files(backup_paths_list)
     old = read_manifest_state(manifest_path, backups[manifest_path])
+    old_version = old["schema_version"] if old else SCHEMA_VERSION
     hook_state_before = current_hook_state(root)
     initial_effective_hooks = effective_hooks_dir(root)
     initial_hooks_raw = effective_hooks_raw(root)
@@ -1302,8 +1386,7 @@ def install(kit_root: Path, root: Path, common: Path, mode: str) -> int:
             raise RuntimeError(
                 "설치 후 core.hooksPath가 변경되었습니다. 사용자의 후속 설정을 "
                 "덮어쓰지 않습니다. 현재 설정을 보존하려면 먼저 --uninstall 상태를 "
-                "수동 감사하세요: "
-                + "; ".join(activation_errors)
+                "수동 감사하세요: " + "; ".join(activation_errors)
             )
         previous_values = list(old["git"]["previous_local_hooks_paths"])
         previous_worktree_values = list(old["git"]["previous_worktree_hooks_paths"])
@@ -1316,7 +1399,9 @@ def install(kit_root: Path, root: Path, common: Path, mode: str) -> int:
         previous_effective = initial_effective_hooks
         previous_raw = initial_hooks_raw
         if previous_effective == hooks_dir.resolve():
-            raise RuntimeError("core.hooksPath가 킷 경로를 가리키지만 manifest가 없습니다.")
+            raise RuntimeError(
+                "core.hooksPath가 킷 경로를 가리키지만 manifest가 없습니다."
+            )
 
     installed_config_path = config_paths[installed_scope]
     if old:
@@ -1344,9 +1429,7 @@ def install(kit_root: Path, root: Path, common: Path, mode: str) -> int:
                     f"Git config에 원장 없는 agent-project-kit marker가 있습니다: {path}"
                 )
         config_existed, config_content, config_mode = backups[installed_config_path]
-        updated_hook_config = append_hook_config_block(
-            config_content, str(hooks_dir)
-        )
+        updated_hook_config = append_hook_config_block(config_content, str(hooks_dir))
         installed_config_state = {
             "path": str(installed_config_path),
             "original_existed": config_existed,
@@ -1396,15 +1479,23 @@ def install(kit_root: Path, root: Path, common: Path, mode: str) -> int:
     if old:
         exclude_state = dict(old["exclude"])
         exclude_errors = exclude_state_errors(
-            common, exclude_state, file_state=backups[exclude]
+            common, exclude_state, version=old_version, file_state=backups[exclude]
         )
         if exclude_errors:
             raise RuntimeError(
                 "info/exclude가 설치 후 변경되었습니다. 사용자 변경을 덮어쓰지 않습니다: "
                 + "; ".join(exclude_errors)
             )
-        updated_exclude = current_exclude
-        write_exclude = False
+        if old_version == SCHEMA_VERSION:
+            updated_exclude = current_exclude
+            write_exclude = False
+        else:
+            # Schema upgrade: replace only the managed block. The user's original
+            # prefix bytes recorded at first install are preserved verbatim.
+            original_prefix = current_exclude[: exclude_state["original_size"]]
+            updated_exclude = append_managed_block(original_prefix)
+            exclude_state["installed_sha256"] = sha256_bytes(updated_exclude)
+            write_exclude = True
     else:
         updated_exclude = append_managed_block(current_exclude)
         exclude_state = {
@@ -1418,7 +1509,7 @@ def install(kit_root: Path, root: Path, common: Path, mode: str) -> int:
         write_exclude = True
 
     manifest = {
-        "schema_version": 1,
+        "schema_version": SCHEMA_VERSION,
         "kit": KIT_NAME,
         "kit_version": KIT_VERSION,
         "install_mode": mode,
@@ -1429,7 +1520,9 @@ def install(kit_root: Path, root: Path, common: Path, mode: str) -> int:
         "mutable_paths": sorted(MUTABLE_PATHS),
         "mutable_files": {
             rel: (
-                old.get("mutable_files", {}).get(rel, sha256_bytes(desired_worktree[rel]))
+                old.get("mutable_files", {}).get(
+                    rel, sha256_bytes(desired_worktree[rel])
+                )
                 if old and backups[root / rel][0]
                 else sha256_bytes(desired_worktree[rel])
             )
@@ -1473,9 +1566,7 @@ def install(kit_root: Path, root: Path, common: Path, mode: str) -> int:
                     )
                 continue
             mode_bits = expected_worktree_mode(rel)
-            atomic_write_recorded(
-                path, data, mode_bits, backups[path], written_files
-            )
+            atomic_write_recorded(path, data, mode_bits, backups[path], written_files)
         for rel, data in desired_common.items():
             path = common_root / rel
             atomic_write_recorded(path, data, 0o755, backups[path], written_files)
@@ -1539,7 +1630,9 @@ def install(kit_root: Path, root: Path, common: Path, mode: str) -> int:
             )
         if installed_scope == "local":
             if final_bare_repositories:
-                raise RuntimeError("설치 중 bare 저장소가 추가되어 local hook 공유가 안전하지 않습니다.")
+                raise RuntimeError(
+                    "설치 중 bare 저장소가 추가되어 local hook 공유가 안전하지 않습니다."
+                )
             effective_errors = installed_hook_effective_errors(
                 final_worktrees, hooks_dir
             )
@@ -1567,8 +1660,14 @@ def install(kit_root: Path, root: Path, common: Path, mode: str) -> int:
     print(f"설치 완료 ({mode}): {root}")
     print("  Claude Code: CLAUDE.local.md + .claude/skills/agent-kit-*")
     print("  Codex:       AGENTS.override.md + .agents/skills/agent-kit-*")
-    print("  공통 상태:   .agent-project-kit/CONTEXT.md, HANDOFF.md")
-    print("이 파일들은 Git 로컬 exclude와 commit/push guard로 보호됩니다. stage/commit하지 마세요.")
+    print("  공통 상태:   .agent-project-kit/CONTEXT.md, HANDOFF.md, templates/")
+    print(
+        "이 파일들은 Git 로컬 exclude와 commit/push guard로 보호됩니다. stage/commit하지 마세요."
+    )
+    print(
+        "다음: 에이전트를 열고 agent-kit-init(신규) 또는 agent-kit-adopt(편입) 스킬로 "
+        "인터뷰를 진행해 AGENTS.md(canonical)와 포인터 CLAUDE.md를 만들거나 병합하세요."
+    )
     return 0
 
 
@@ -1595,13 +1694,13 @@ def check_hashes(
     return errors
 
 
-def block_is_exact(exclude: Path) -> bool:
+def block_is_exact(exclude: Path, version: int | None = None) -> bool:
     if not exclude.is_file() or exclude.is_symlink():
         return False
     data = exclude.read_bytes()
     start = BLOCK_START.encode("utf-8")
     end = BLOCK_END.encode("utf-8")
-    expected = expected_exclude_block().encode("utf-8")
+    expected = expected_exclude_block(version).encode("utf-8")
     if data.count(start) != 1 or data.count(end) != 1:
         return False
     return data.count(expected) == 1
@@ -1611,6 +1710,7 @@ def exclude_state_errors(
     common: Path,
     state: dict,
     *,
+    version: int | None = None,
     file_state: tuple[bool, bytes, int] | None = None,
 ) -> list[str]:
     exclude = common / "info" / "exclude"
@@ -1640,13 +1740,13 @@ def exclude_state_errors(
     if sha256_bytes(original) != state["original_sha256"]:
         errors.append("info/exclude 원본 prefix가 설치 원장과 다름")
     try:
-        expected = append_managed_block(original)
+        expected = append_managed_block(original, version)
     except RuntimeError as error:
         errors.append(str(error))
     else:
         if data != expected:
             errors.append("info/exclude managed block 경계가 설치 원장과 다름")
-    expected_block = expected_exclude_block().encode("utf-8")
+    expected_block = expected_exclude_block(version).encode("utf-8")
     start = BLOCK_START.encode("utf-8")
     end = BLOCK_END.encode("utf-8")
     if (
@@ -1692,9 +1792,7 @@ def hook_config_state_errors(
         errors.append("hook config 원본 prefix가 설치 원장과 다름")
         return errors
     try:
-        expected = append_hook_config_block(
-            original, git_state["installed_hooks_path"]
-        )
+        expected = append_hook_config_block(original, git_state["installed_hooks_path"])
     except RuntimeError as error:
         errors.append(str(error))
     else:
@@ -1742,10 +1840,13 @@ def inspect(kit_root: Path, root: Path, common: Path, verbose: bool) -> int:
         if rel in MUTABLE_PATHS:
             continue
         path = root / rel
-        if path.is_file() and sha256_file(path) != sha256_bytes(payload[source_rel(key)]):
+        if path.is_file() and sha256_file(path) != sha256_bytes(
+            payload[source_rel(key)]
+        ):
             errors.append(f"현재 킷 payload와 설치본이 다름(재설치 필요): {rel}")
     desired_common = dispatcher_files(
-        common_root, Path(manifest.get("git", {}).get("previous_effective_hooks_dir", "."))
+        common_root,
+        Path(manifest.get("git", {}).get("previous_effective_hooks_dir", ".")),
     )
     desired_common["guard.py"] = payload["hooks/guard.py"]
     for rel, data in desired_common.items():
@@ -1765,8 +1866,14 @@ def inspect(kit_root: Path, root: Path, common: Path, verbose: bool) -> int:
         errors.append("예약 prefix의 unowned 파일: " + ", ".join(reserved))
     common_reserved = common_reserved_collisions(common_root, manifest)
     if common_reserved:
-        errors.append("Git metadata 예약 namespace의 unowned 파일: " + ", ".join(common_reserved))
-    errors.extend(exclude_state_errors(common, manifest["exclude"]))
+        errors.append(
+            "Git metadata 예약 namespace의 unowned 파일: " + ", ".join(common_reserved)
+        )
+    errors.extend(
+        exclude_state_errors(
+            common, manifest["exclude"], version=manifest["schema_version"]
+        )
+    )
     errors.extend(hook_config_state_errors(root, manifest["git"]))
     try:
         ensure_all_ignored(root)
@@ -1786,10 +1893,14 @@ def inspect(kit_root: Path, root: Path, common: Path, verbose: bool) -> int:
         json.loads((root / ".codex/hooks.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         errors.append(f"provider hook JSON 오류: {error}")
-    for skill in SKILLS:
+    for skill in SCHEMA_SKILLS[SCHEMA_VERSION]:
         left = root / f".agents/skills/agent-kit-{skill}/SKILL.md"
         right = root / f".claude/skills/agent-kit-{skill}/SKILL.md"
-        if left.is_file() and right.is_file() and left.read_bytes() != right.read_bytes():
+        if (
+            left.is_file()
+            and right.is_file()
+            and left.read_bytes() != right.read_bytes()
+        ):
             errors.append(f"provider skill 내용 불일치: agent-kit-{skill}")
     if verbose:
         print(f"agent-project-kit doctor: {root}")
@@ -1822,9 +1933,7 @@ def uninstall(root: Path, common: Path) -> int:
         reject_symlink_escape(common, f"{KIT_NAME}/{rel}")
     reject_symlink_escape(common, "info/exclude")
     backups = backup_files(removal_paths)
-    manifest = read_manifest_state(
-        manifest_path, backups[manifest_path], required=True
-    )
+    manifest = read_manifest_state(manifest_path, backups[manifest_path], required=True)
     assert manifest is not None
     if Path(manifest.get("worktree_root", "")).resolve() != root:
         raise RuntimeError("manifest의 worktree와 대상이 달라 uninstall을 중단합니다.")
@@ -1834,21 +1943,32 @@ def uninstall(root: Path, common: Path) -> int:
     warnings.extend(sibling_worktree_collisions(root, worktrees))
     tracked = tracked_owned(root)
     if tracked:
-        warnings.append("로컬 킷 파일이 Git index/tracking에 포함됨: " + ", ".join(tracked))
+        warnings.append(
+            "로컬 킷 파일이 Git index/tracking에 포함됨: " + ", ".join(tracked)
+        )
     common_reserved = common_reserved_collisions(common_root, manifest)
     if common_reserved:
-        warnings.append("Git metadata 예약 namespace의 unowned 파일: " + ", ".join(common_reserved))
+        warnings.append(
+            "Git metadata 예약 namespace의 unowned 파일: " + ", ".join(common_reserved)
+        )
     installed_scope = manifest["git"]["installed_hooks_scope"]
     installed_config_path = config_paths[installed_scope]
     installed_hook_state = current_hook_state(root)
     warnings.extend(managed_hook_activation_errors(root, manifest["git"]))
     if installed_scope == "local":
-        warnings.extend(installed_hook_effective_errors(worktrees, common_root / "hooks"))
+        warnings.extend(
+            installed_hook_effective_errors(worktrees, common_root / "hooks")
+        )
         if bare_repositories:
-            warnings.append("bare 저장소가 local hook 설정을 공유하는 설치는 안전하지 않음")
+            warnings.append(
+                "bare 저장소가 local hook 설정을 공유하는 설치는 안전하지 않음"
+            )
     warnings.extend(
         exclude_state_errors(
-            common, manifest["exclude"], file_state=backups[exclude]
+            common,
+            manifest["exclude"],
+            version=manifest["schema_version"],
+            file_state=backups[exclude],
         )
     )
     warnings.extend(
@@ -1872,9 +1992,8 @@ def uninstall(root: Path, common: Path) -> int:
             file_state = backups[path]
             if not file_state[0]:
                 continue
-            if (
-                sha256_bytes(file_state[1]) != expected
-                or file_state[2] != mode_for(rel)
+            if sha256_bytes(file_state[1]) != expected or file_state[2] != mode_for(
+                rel
             ):
                 warnings.append(f"수정된 소유 파일 보존: {path}")
     for rel in manifest.get("mutable_paths", []):
@@ -1896,7 +2015,9 @@ def uninstall(root: Path, common: Path) -> int:
     if warnings:
         for item in warnings:
             print(f"  WARNING: {item}", file=sys.stderr)
-        print("uninstall 중단: 어떤 파일이나 설정도 제거하지 않았습니다.", file=sys.stderr)
+        print(
+            "uninstall 중단: 어떤 파일이나 설정도 제거하지 않았습니다.", file=sys.stderr
+        )
         return 1
 
     before_statuses = {worktree: status_snapshot(worktree) for worktree in worktrees}
@@ -1929,7 +2050,9 @@ def uninstall(root: Path, common: Path) -> int:
             worktrees, common_root / "hooks"
         )
         if restored_errors:
-            raise RuntimeError("기존 hook config 복원 실패: " + "; ".join(restored_errors))
+            raise RuntimeError(
+                "기존 hook config 복원 실패: " + "; ".join(restored_errors)
+            )
         exclude_state = manifest["exclude"]
         original_exclude = backups[exclude][1][: exclude_state["original_size"]]
         if exclude_state["original_existed"]:
@@ -1969,12 +2092,16 @@ def uninstall(root: Path, common: Path) -> int:
             final_worktrees, common_root / "hooks"
         )
         if restored_errors:
-            raise RuntimeError("제거 후 hook config 복원 실패: " + "; ".join(restored_errors))
+            raise RuntimeError(
+                "제거 후 hook config 복원 실패: " + "; ".join(restored_errors)
+            )
         after_statuses = {
             worktree: status_snapshot(worktree) for worktree in final_worktrees
         }
         if after_statuses != before_statuses:
-            raise RuntimeError("제거 전후 어느 linked worktree의 git status가 달라졌습니다.")
+            raise RuntimeError(
+                "제거 전후 어느 linked worktree의 git status가 달라졌습니다."
+            )
     except BaseException as original_error:
         rollback_errors = restore_files(
             backups, post_states, set(config_paths.values())
@@ -1988,7 +2115,9 @@ def uninstall(root: Path, common: Path) -> int:
 
     print(f"uninstall 완료: {root}")
     if removed_mutable:
-        print(f"  명시적 uninstall 정책에 따라 mutable local state {removed_mutable}개를 제거했습니다.")
+        print(
+            f"  명시적 uninstall 정책에 따라 mutable local state {removed_mutable}개를 제거했습니다."
+        )
     return 0
 
 

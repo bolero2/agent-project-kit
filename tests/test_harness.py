@@ -4,10 +4,12 @@ import fcntl
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from scripts import agent_project_kit as kit_core
 
@@ -15,11 +17,13 @@ from scripts import agent_project_kit as kit_core
 ROOT = Path(__file__).resolve().parents[1]
 BOOTSTRAP = ROOT / "bootstrap.sh"
 
-SKILL_NAMES = ("init", "adopt", "handoff", "wrap-up")
+SKILL_NAMES = ("init", "adopt", "handoff", "wrap-up", "skill-sync")
 OWNED_PATHS = (
     ".agent-project-kit/CONTEXT.md",
     ".agent-project-kit/HANDOFF.md",
     ".agent-project-kit/hooks/guard.py",
+    ".agent-project-kit/templates/AGENTS.template.md",
+    ".agent-project-kit/templates/CLAUDE.template.md",
     "AGENTS.override.md",
     "CLAUDE.local.md",
     ".claude/settings.local.json",
@@ -69,7 +73,9 @@ def run(
     )
 
 
-def git(repo: Path, *args: str, input_bytes: bytes | None = None) -> subprocess.CompletedProcess[bytes]:
+def git(
+    repo: Path, *args: str, input_bytes: bytes | None = None
+) -> subprocess.CompletedProcess[bytes]:
     return run("git", "-C", repo, *args, input_bytes=input_bytes)
 
 
@@ -77,7 +83,9 @@ def output(result: subprocess.CompletedProcess[bytes]) -> str:
     return (result.stdout + result.stderr).decode("utf-8", "replace")
 
 
-def assert_ok(test: unittest.TestCase, result: subprocess.CompletedProcess[bytes]) -> None:
+def assert_ok(
+    test: unittest.TestCase, result: subprocess.CompletedProcess[bytes]
+) -> None:
     test.assertEqual(result.returncode, 0, output(result))
 
 
@@ -85,7 +93,10 @@ def init_repo(repo: Path, *, with_head: bool = True) -> None:
     repo.mkdir(parents=True, exist_ok=True)
     assert git(repo, "init", "-q").returncode == 0
     assert git(repo, "config", "user.name", "agent-kit-test").returncode == 0
-    assert git(repo, "config", "user.email", "agent-kit-test@example.invalid").returncode == 0
+    assert (
+        git(repo, "config", "user.email", "agent-kit-test@example.invalid").returncode
+        == 0
+    )
     assert git(repo, "config", "commit.gpgsign", "false").returncode == 0
     if with_head:
         (repo / "README.md").write_text("fixture\n")
@@ -104,7 +115,11 @@ def staged_paths(repo: Path) -> list[str]:
     result = git(repo, "diff", "--cached", "--name-only", "-z", "--diff-filter=d")
     if result.returncode != 0:
         raise AssertionError(output(result))
-    return [item.decode("utf-8", "surrogateescape") for item in result.stdout.split(b"\0") if item]
+    return [
+        item.decode("utf-8", "surrogateescape")
+        for item in result.stdout.split(b"\0")
+        if item
+    ]
 
 
 def git_common_dir(repo: Path) -> Path:
@@ -135,7 +150,9 @@ def hook_input(command: str, cwd: Path, event: str = "PreToolUse") -> bytes:
 
 
 class WorktreeParserTests(unittest.TestCase):
-    def test_git_231_porcelain_fallback_preserves_quoted_bytes_and_trailing_space(self) -> None:
+    def test_git_231_porcelain_fallback_preserves_quoted_bytes_and_trailing_space(
+        self,
+    ) -> None:
         data = (
             b'worktree "/tmp/space\\040and\\n\\303\\251"\nHEAD 1111\n\n'
             b"worktree /tmp/trailing \nHEAD 2222\n\n"
@@ -143,7 +160,9 @@ class WorktreeParserTests(unittest.TestCase):
 
         parsed = kit_core.parse_worktree_porcelain(data, nul=False)
 
-        self.assertEqual(parsed[0], ("/tmp/space and\n\N{LATIN SMALL LETTER E WITH ACUTE}", False))
+        self.assertEqual(
+            parsed[0], ("/tmp/space and\n\N{LATIN SMALL LETTER E WITH ACUTE}", False)
+        )
         self.assertEqual(parsed[1], ("/tmp/trailing ", False))
 
     def test_git_242_nul_porcelain_preserves_bare_entry(self) -> None:
@@ -164,7 +183,9 @@ class RepositoryFixture(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def bootstrap(self, *flags: str, repo: Path | None = None) -> subprocess.CompletedProcess[bytes]:
+    def bootstrap(
+        self, *flags: str, repo: Path | None = None
+    ) -> subprocess.CompletedProcess[bytes]:
         return run(BOOTSTRAP, *flags, repo or self.repo, cwd=ROOT)
 
 
@@ -180,7 +201,9 @@ class InstallIsolationTests(RepositoryFixture):
         assert_ok(self, git(unborn, "add", "-A"))
         self.assertEqual(staged_paths(unborn), [])
 
-    def test_fresh_install_preserves_status_and_add_all_stages_no_kit_paths(self) -> None:
+    def test_fresh_install_preserves_status_and_add_all_stages_no_kit_paths(
+        self,
+    ) -> None:
         before = status(self.repo)
         result = self.bootstrap()
         assert_ok(self, result)
@@ -193,7 +216,9 @@ class InstallIsolationTests(RepositoryFixture):
         assert_ok(self, git(self.repo, "add", "-A"))
         self.assertEqual(staged_paths(self.repo), ["user-change.txt"])
 
-    def test_adopt_preserves_staged_unstaged_and_untracked_user_status_exactly(self) -> None:
+    def test_adopt_preserves_staged_unstaged_and_untracked_user_status_exactly(
+        self,
+    ) -> None:
         staged = self.repo / "staged.txt"
         unstaged = self.repo / "unstaged.txt"
         staged.write_text("base\n")
@@ -251,7 +276,9 @@ class InstallIsolationTests(RepositoryFixture):
         self.assertFalse(manifest_path(self.repo).exists())
         self.assertFalse((self.repo / ".agent-project-kit").exists())
 
-    def test_unowned_file_under_reserved_kit_prefix_fails_without_mutation(self) -> None:
+    def test_unowned_file_under_reserved_kit_prefix_fails_without_mutation(
+        self,
+    ) -> None:
         reserved = self.repo / ".agent-project-kit/user.md"
         reserved.parent.mkdir()
         reserved.write_text("pre-existing user file\n")
@@ -273,7 +300,9 @@ class InstallIsolationTests(RepositoryFixture):
         assert_ok(self, git(self.repo, "add", "AGENTS.override.md"))
         assert_ok(self, git(self.repo, "commit", "-qm", "user override"))
         before_status = status(self.repo)
-        before_blob = git(self.repo, "rev-parse", "HEAD:AGENTS.override.md").stdout.strip()
+        before_blob = git(
+            self.repo, "rev-parse", "HEAD:AGENTS.override.md"
+        ).stdout.strip()
 
         result = self.bootstrap("--adopt")
         self.assertNotEqual(result.returncode, 0, output(result))
@@ -289,7 +318,9 @@ class InstallIsolationTests(RepositoryFixture):
         first = self.bootstrap()
         assert_ok(self, first)
         before_status = status(self.repo)
-        before_files = {relative: (self.repo / relative).read_bytes() for relative in OWNED_PATHS}
+        before_files = {
+            relative: (self.repo / relative).read_bytes() for relative in OWNED_PATHS
+        }
         before_manifest = manifest_path(self.repo).read_bytes()
 
         second = self.bootstrap()
@@ -325,7 +356,9 @@ class InstallIsolationTests(RepositoryFixture):
         for relative in OWNED_PATHS:
             self.assertFalse((spaced / relative).exists(), relative)
 
-    def test_trailing_space_target_is_not_confused_with_sibling_repository(self) -> None:
+    def test_trailing_space_target_is_not_confused_with_sibling_repository(
+        self,
+    ) -> None:
         trailing = self.base / "project "
         init_repo(trailing)
         before_plain = status(self.repo)
@@ -388,7 +421,9 @@ class InstallIsolationTests(RepositoryFixture):
             fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
         stdout, stderr = process.communicate(timeout=15)
-        self.assertEqual(process.returncode, 0, (stdout + stderr).decode("utf-8", "replace"))
+        self.assertEqual(
+            process.returncode, 0, (stdout + stderr).decode("utf-8", "replace")
+        )
         assert_ok(self, self.bootstrap("--uninstall"))
 
     def test_preexisting_empty_lock_hardlink_is_not_modified(self) -> None:
@@ -442,7 +477,9 @@ class InstallIsolationTests(RepositoryFixture):
             1,
         )
 
-    def test_concurrent_hook_config_edit_is_preserved_and_install_rolls_back(self) -> None:
+    def test_concurrent_hook_config_edit_is_preserved_and_install_rolls_back(
+        self,
+    ) -> None:
         root, common = kit_core.find_repository(str(self.repo))
         trigger = root / "AGENTS.override.md"
         original_atomic = kit_core.atomic_write
@@ -484,7 +521,9 @@ class InstallIsolationTests(RepositoryFixture):
         self.assertFalse((self.repo / "AGENTS.override.md").exists())
         self.assertFalse(manifest_path(self.repo).exists())
 
-    def test_interrupt_after_install_hook_config_write_restores_exact_bytes(self) -> None:
+    def test_interrupt_after_install_hook_config_write_restores_exact_bytes(
+        self,
+    ) -> None:
         assert_ok(
             self,
             git(self.repo, "config", "--local", "core.hooksPath", ".user-hooks"),
@@ -536,9 +575,7 @@ class InstallIsolationTests(RepositoryFixture):
             )
         before = config.read_bytes()
         before_mode = config.stat().st_mode & 0o7777
-        raw_before = git(
-            self.repo, "config", "--null", "--get", "core.hooksPath"
-        )
+        raw_before = git(self.repo, "config", "--null", "--get", "core.hooksPath")
         directory_before = git(
             self.repo,
             "rev-parse",
@@ -567,7 +604,9 @@ class InstallIsolationTests(RepositoryFixture):
         self.assertEqual(raw_after.stdout, raw_before.stdout)
         self.assertEqual(directory_after.stdout, directory_before.stdout)
 
-    def test_hook_config_write_uses_git_lock_and_preserves_competing_user_key(self) -> None:
+    def test_hook_config_write_uses_git_lock_and_preserves_competing_user_key(
+        self,
+    ) -> None:
         assert_ok(
             self,
             git(self.repo, "config", "--local", "user.lock-race", "before"),
@@ -578,7 +617,9 @@ class InstallIsolationTests(RepositoryFixture):
         original_replace = kit_core.os.replace
         attempted = False
 
-        def competing_replace(source: str | os.PathLike[str], destination: str | os.PathLike[str]) -> None:
+        def competing_replace(
+            source: str | os.PathLike[str], destination: str | os.PathLike[str]
+        ) -> None:
             nonlocal attempted
             if Path(source) == config_lock and not attempted:
                 attempted = True
@@ -638,7 +679,9 @@ class InstallIsolationTests(RepositoryFixture):
         self.assertFalse(manifest_path(self.repo).exists())
         self.assertEqual(status(self.repo), b"")
 
-    def test_owned_file_created_after_preflight_snapshot_is_not_overwritten(self) -> None:
+    def test_owned_file_created_after_preflight_snapshot_is_not_overwritten(
+        self,
+    ) -> None:
         root, common = kit_core.find_repository(str(self.repo))
         user_file = self.repo / "CLAUDE.local.md"
         original_backup = kit_core.backup_files
@@ -666,7 +709,9 @@ class InstallIsolationTests(RepositoryFixture):
         self.assertFalse((self.repo / "AGENTS.override.md").exists())
         self.assertFalse(manifest_path(self.repo).exists())
 
-    def test_worktree_added_mid_install_causes_rollback_without_hiding_user_file(self) -> None:
+    def test_worktree_added_mid_install_causes_rollback_without_hiding_user_file(
+        self,
+    ) -> None:
         root, common = kit_core.find_repository(str(self.repo))
         trigger = root / "AGENTS.override.md"
         linked = self.base / "concurrent-linked"
@@ -715,7 +760,9 @@ class InstallIsolationTests(RepositoryFixture):
 
 class SymlinkAndWorktreeTests(RepositoryFixture):
     def test_symlinked_adapter_directories_cannot_escape_target(self) -> None:
-        for index, relative in enumerate((".agent-project-kit", ".claude", ".codex", ".agents")):
+        for index, relative in enumerate(
+            (".agent-project-kit", ".claude", ".codex", ".agents")
+        ):
             with self.subTest(relative=relative):
                 repo = self.base / f"symlink-case-{index}"
                 outside = self.base / f"outside-{index}"
@@ -812,7 +859,9 @@ class SymlinkAndWorktreeTests(RepositoryFixture):
         uninstall = self.bootstrap("--uninstall", repo=linked)
 
         self.assertNotEqual(uninstall.returncode, 0, output(uninstall))
-        self.assertEqual(user_file.read_text(), "created while common exclude is active\n")
+        self.assertEqual(
+            user_file.read_text(), "created while common exclude is active\n"
+        )
         self.assertTrue(manifest_path(linked).exists())
 
 
@@ -838,7 +887,9 @@ class GitGuardTests(RepositoryFixture):
         assert_ok(self, configured)
         self.assertEqual(configured.stdout.decode().strip(), ".user-hooks")
 
-    def test_hooks_path_leading_and_trailing_spaces_round_trips_and_chains(self) -> None:
+    def test_hooks_path_leading_and_trailing_spaces_round_trips_and_chains(
+        self,
+    ) -> None:
         user_hooks = self.repo / " hooks "
         user_hooks.mkdir()
         pre_commit = user_hooks / "pre-commit"
@@ -920,13 +971,17 @@ class GitGuardTests(RepositoryFixture):
         assert_ok(self, configured)
         self.assertEqual(configured.stdout, raw.encode() + b"\0")
 
-    def test_reinstall_does_not_overwrite_hooks_path_changed_after_install(self) -> None:
+    def test_reinstall_does_not_overwrite_hooks_path_changed_after_install(
+        self,
+    ) -> None:
         assert_ok(self, self.bootstrap())
         expected_manifest = manifest_path(self.repo).read_bytes()
         expected_files = {
             relative: (self.repo / relative).read_bytes() for relative in OWNED_PATHS
         }
-        assert_ok(self, git(self.repo, "config", "--local", "core.hooksPath", ".new-hooks"))
+        assert_ok(
+            self, git(self.repo, "config", "--local", "core.hooksPath", ".new-hooks")
+        )
 
         reinstall = self.bootstrap()
 
@@ -938,9 +993,13 @@ class GitGuardTests(RepositoryFixture):
         for relative, content in expected_files.items():
             self.assertEqual((self.repo / relative).read_bytes(), content, relative)
 
-    def test_worktree_scoped_hooks_are_preserved_and_guard_remains_effective(self) -> None:
+    def test_worktree_scoped_hooks_are_preserved_and_guard_remains_effective(
+        self,
+    ) -> None:
         assert_ok(self, git(self.repo, "config", "extensions.worktreeConfig", "true"))
-        assert_ok(self, git(self.repo, "config", "--worktree", "core.hooksPath", ".wt-hooks"))
+        assert_ok(
+            self, git(self.repo, "config", "--worktree", "core.hooksPath", ".wt-hooks")
+        )
 
         assert_ok(self, self.bootstrap())
         configured = git(self.repo, "config", "--worktree", "--get", "core.hooksPath")
@@ -957,7 +1016,9 @@ class GitGuardTests(RepositoryFixture):
         assert_ok(self, restored)
         self.assertEqual(restored.stdout.decode().strip(), ".wt-hooks")
 
-    def test_shared_local_dispatcher_chains_each_worktrees_conditional_hook(self) -> None:
+    def test_shared_local_dispatcher_chains_each_worktrees_conditional_hook(
+        self,
+    ) -> None:
         linked = self.base / "feature-worktree"
         assert_ok(
             self,
@@ -970,12 +1031,8 @@ class GitGuardTests(RepositoryFixture):
         marker = self.base / "branch-hook-marker"
         main_pre_commit = main_hooks / "pre-commit"
         feature_pre_commit = feature_hooks / "pre-commit"
-        main_pre_commit.write_text(
-            f"#!/bin/sh\nprintf 'main\\n' >> {marker}\n"
-        )
-        feature_pre_commit.write_text(
-            f"#!/bin/sh\nprintf 'feature\\n' >> {marker}\n"
-        )
+        main_pre_commit.write_text(f"#!/bin/sh\nprintf 'main\\n' >> {marker}\n")
+        feature_pre_commit.write_text(f"#!/bin/sh\nprintf 'feature\\n' >> {marker}\n")
         main_pre_commit.chmod(0o755)
         feature_pre_commit.chmod(0o755)
         main_config = self.base / "main-hooks.config"
@@ -1035,7 +1092,9 @@ class GitGuardTests(RepositoryFixture):
         self.assertEqual(status(self.repo), before_main)
         self.assertEqual(status(linked), before_linked)
 
-    def test_branch_switch_uses_dynamic_previous_hook_and_uninstalls_exactly(self) -> None:
+    def test_branch_switch_uses_dynamic_previous_hook_and_uninstalls_exactly(
+        self,
+    ) -> None:
         marker = self.base / "dynamic-branch-marker"
         main_hooks = self.base / "dynamic-main-hooks"
         other_hooks = self.base / "dynamic-other-hooks"
@@ -1097,7 +1156,9 @@ class GitGuardTests(RepositoryFixture):
         self.assertNotEqual(commit.returncode, 0, output(commit))
         self.assertIn(forced, staged_paths(self.repo))
 
-    def test_guard_keeps_core_owned_paths_when_manifest_allowlist_is_tampered(self) -> None:
+    def test_guard_keeps_core_owned_paths_when_manifest_allowlist_is_tampered(
+        self,
+    ) -> None:
         assert_ok(self, self.bootstrap())
         path = manifest_path(self.repo)
         manifest = json.loads(path.read_text())
@@ -1107,12 +1168,16 @@ class GitGuardTests(RepositoryFixture):
         forced = "CLAUDE.local.md"
         assert_ok(self, git(self.repo, "add", "-f", forced))
 
-        commit = git(self.repo, "commit", "-m", "tampered manifest must not disable guard")
+        commit = git(
+            self.repo, "commit", "-m", "tampered manifest must not disable guard"
+        )
 
         self.assertNotEqual(commit.returncode, 0, output(commit))
         self.assertIn(forced, staged_paths(self.repo))
 
-    def test_force_added_dotfile_owned_paths_are_all_rejected_by_pre_commit(self) -> None:
+    def test_force_added_dotfile_owned_paths_are_all_rejected_by_pre_commit(
+        self,
+    ) -> None:
         assert_ok(self, self.bootstrap())
         forced = (
             ".agent-project-kit/CONTEXT.md",
@@ -1132,8 +1197,12 @@ class GitGuardTests(RepositoryFixture):
         assert_ok(self, self.bootstrap())
         leaked = ".codex/hooks.json"
         assert_ok(self, git(self.repo, "add", "-f", leaked))
-        assert_ok(self, git(self.repo, "commit", "--no-verify", "-qm", "leaked fixture"))
-        self.assertEqual(git(self.repo, "ls-files", leaked).stdout.decode().strip(), leaked)
+        assert_ok(
+            self, git(self.repo, "commit", "--no-verify", "-qm", "leaked fixture")
+        )
+        self.assertEqual(
+            git(self.repo, "ls-files", leaked).stdout.decode().strip(), leaked
+        )
 
         assert_ok(self, git(self.repo, "rm", "--cached", "-f", "--", leaked))
         cleanup = git(self.repo, "commit", "-m", "remove leaked local kit path")
@@ -1146,20 +1215,30 @@ class GitGuardTests(RepositoryFixture):
         assert_ok(self, run("git", "init", "--bare", "-q", remote))
         assert_ok(self, git(self.repo, "remote", "add", "origin", remote))
         assert_ok(self, git(self.repo, "push", "-q", "-u", "origin", "HEAD"))
-        branch = git(self.repo, "symbolic-ref", "--short", "HEAD").stdout.decode().strip()
-        remote_before = run("git", "--git-dir", remote, "rev-parse", f"refs/heads/{branch}").stdout.strip()
+        branch = (
+            git(self.repo, "symbolic-ref", "--short", "HEAD").stdout.decode().strip()
+        )
+        remote_before = run(
+            "git", "--git-dir", remote, "rev-parse", f"refs/heads/{branch}"
+        ).stdout.strip()
 
         assert_ok(self, self.bootstrap())
         forced = "AGENTS.override.md"
         assert_ok(self, git(self.repo, "add", "-f", forced))
-        assert_ok(self, git(self.repo, "commit", "--no-verify", "-qm", "bypass fixture"))
+        assert_ok(
+            self, git(self.repo, "commit", "--no-verify", "-qm", "bypass fixture")
+        )
 
         push = git(self.repo, "push", "origin", "HEAD")
         self.assertNotEqual(push.returncode, 0, output(push))
-        remote_after = run("git", "--git-dir", remote, "rev-parse", f"refs/heads/{branch}").stdout.strip()
+        remote_after = run(
+            "git", "--git-dir", remote, "rev-parse", f"refs/heads/{branch}"
+        ).stdout.strip()
         self.assertEqual(remote_after, remote_before)
 
-    def test_pre_push_checks_tip_tree_when_owned_path_is_unchanged_in_latest_commit(self) -> None:
+    def test_pre_push_checks_tip_tree_when_owned_path_is_unchanged_in_latest_commit(
+        self,
+    ) -> None:
         remote = self.base / "tree-check-remote.git"
         assert_ok(self, run("git", "init", "--bare", "-q", remote))
         assert_ok(self, git(self.repo, "remote", "add", "origin", remote))
@@ -1168,7 +1247,9 @@ class GitGuardTests(RepositoryFixture):
 
         leaked = ".agent-project-kit/CONTEXT.md"
         assert_ok(self, git(self.repo, "add", "-f", leaked))
-        assert_ok(self, git(self.repo, "commit", "--no-verify", "-qm", "leaked ancestor"))
+        assert_ok(
+            self, git(self.repo, "commit", "--no-verify", "-qm", "leaked ancestor")
+        )
         assert_ok(
             self,
             git(
@@ -1203,11 +1284,15 @@ class GitGuardTests(RepositoryFixture):
         assert_ok(self, run("git", "init", "--bare", "-q", remote))
         assert_ok(self, git(self.repo, "remote", "add", "origin", remote))
         assert_ok(self, self.bootstrap())
-        branch = git(self.repo, "symbolic-ref", "--short", "HEAD").stdout.decode().strip()
+        branch = (
+            git(self.repo, "symbolic-ref", "--short", "HEAD").stdout.decode().strip()
+        )
 
         leaked = "CLAUDE.local.md"
         assert_ok(self, git(self.repo, "add", "-f", leaked))
-        assert_ok(self, git(self.repo, "commit", "--no-verify", "-qm", "leaked ancestor"))
+        assert_ok(
+            self, git(self.repo, "commit", "--no-verify", "-qm", "leaked ancestor")
+        )
         leaked_oid = git(self.repo, "rev-parse", "HEAD").stdout.decode().strip()
         assert_ok(self, git(self.repo, "rm", "--cached", "-f", "--", leaked))
         assert_ok(self, git(self.repo, "commit", "-qm", "clean tip"))
@@ -1238,7 +1323,9 @@ class GitGuardTests(RepositoryFixture):
         ).stdout.strip()
         self.assertEqual(remote_after, clean_oid)
 
-    def test_new_branch_push_is_blocked_even_if_tip_is_reachable_from_other_remote(self) -> None:
+    def test_new_branch_push_is_blocked_even_if_tip_is_reachable_from_other_remote(
+        self,
+    ) -> None:
         remote_a = self.base / "remote-a.git"
         remote_b = self.base / "remote-b.git"
         assert_ok(self, run("git", "init", "--bare", "-q", remote_a))
@@ -1249,7 +1336,10 @@ class GitGuardTests(RepositoryFixture):
 
         leaked = ".agents/skills/agent-kit-init/SKILL.md"
         assert_ok(self, git(self.repo, "add", "-f", leaked))
-        assert_ok(self, git(self.repo, "commit", "--no-verify", "-qm", "reachable leaked tree"))
+        assert_ok(
+            self,
+            git(self.repo, "commit", "--no-verify", "-qm", "reachable leaked tree"),
+        )
         assert_ok(
             self,
             git(
@@ -1303,7 +1393,9 @@ class ManifestDoctorAndUninstallTests(RepositoryFixture):
         diff = self.bootstrap("--diff")
         self.assertNotEqual(diff.returncode, 0, output(diff))
 
-    def test_non_executable_git_hook_is_detected_and_not_silently_rewritten_or_removed(self) -> None:
+    def test_non_executable_git_hook_is_detected_and_not_silently_rewritten_or_removed(
+        self,
+    ) -> None:
         assert_ok(self, self.bootstrap())
         wrapper = git_common_dir(self.repo) / "agent-project-kit/hooks/pre-commit"
         wrapper.chmod(0o644)
@@ -1341,7 +1433,9 @@ class ManifestDoctorAndUninstallTests(RepositoryFixture):
         for relative in OWNED_PATHS:
             self.assertFalse((self.repo / relative).exists(), relative)
 
-    def test_uninstall_preserves_preexisting_empty_provider_directories_and_modes(self) -> None:
+    def test_uninstall_preserves_preexisting_empty_provider_directories_and_modes(
+        self,
+    ) -> None:
         directories = {
             self.repo / ".agent-project-kit": 0o711,
             self.repo / ".agents": 0o751,
@@ -1420,7 +1514,9 @@ class ManifestDoctorAndUninstallTests(RepositoryFixture):
         assert_ok(self, git(self.repo, "reset", "-q", "HEAD", "--", forced))
         assert_ok(self, self.bootstrap("--uninstall"))
 
-    def test_manifest_path_traversal_cannot_delete_file_outside_repository(self) -> None:
+    def test_manifest_path_traversal_cannot_delete_file_outside_repository(
+        self,
+    ) -> None:
         assert_ok(self, self.bootstrap())
         victim = self.base / "victim.txt"
         victim.write_text("must survive\n")
@@ -1435,11 +1531,15 @@ class ManifestDoctorAndUninstallTests(RepositoryFixture):
         self.assertEqual(victim.read_text(), "must survive\n")
         self.assertTrue(path.exists())
 
-    def test_uninstall_aborts_when_user_line_is_inserted_inside_managed_exclude_block(self) -> None:
+    def test_uninstall_aborts_when_user_line_is_inserted_inside_managed_exclude_block(
+        self,
+    ) -> None:
         assert_ok(self, self.bootstrap())
         exclude = git_common_dir(self.repo) / "info/exclude"
         marker = "# <<< agent-project-kit managed"
-        exclude.write_text(exclude.read_text().replace(marker, "/user-local-cache/\n" + marker))
+        exclude.write_text(
+            exclude.read_text().replace(marker, "/user-local-cache/\n" + marker)
+        )
         expected = exclude.read_bytes()
 
         uninstall = self.bootstrap("--uninstall")
@@ -1448,7 +1548,9 @@ class ManifestDoctorAndUninstallTests(RepositoryFixture):
         self.assertEqual(exclude.read_bytes(), expected)
         self.assertTrue(manifest_path(self.repo).exists())
 
-    def test_uninstall_rejects_symlinked_owned_parent_without_touching_target(self) -> None:
+    def test_uninstall_rejects_symlinked_owned_parent_without_touching_target(
+        self,
+    ) -> None:
         assert_ok(self, self.bootstrap())
         provider = self.repo / ".agents"
         external_provider = self.base / "external-agents"
@@ -1463,7 +1565,9 @@ class ManifestDoctorAndUninstallTests(RepositoryFixture):
         self.assertEqual(victim.read_bytes(), expected)
         self.assertTrue(manifest_path(self.repo).exists())
 
-    def test_keyboard_interrupt_during_uninstall_rolls_back_before_propagating(self) -> None:
+    def test_keyboard_interrupt_during_uninstall_rolls_back_before_propagating(
+        self,
+    ) -> None:
         assert_ok(self, self.bootstrap())
         before_status = status(self.repo)
         before_files = {
@@ -1474,9 +1578,7 @@ class ManifestDoctorAndUninstallTests(RepositoryFixture):
         original_unlink = kit_core.unlink_if_unchanged
         calls = 0
 
-        def interrupting_unlink(
-            path: Path, expected: tuple[bool, bytes, int]
-        ) -> None:
+        def interrupting_unlink(path: Path, expected: tuple[bool, bytes, int]) -> None:
             nonlocal calls
             calls += 1
             original_unlink(path, expected)
@@ -1580,7 +1682,9 @@ class PlatformParityTests(RepositoryFixture):
                 codex = self.repo / f".agents/skills/agent-kit-{name}/SKILL.md"
                 self.assertEqual(claude.read_bytes(), codex.read_bytes())
 
-    def test_provider_hooks_use_the_same_local_guard_without_checkout_paths(self) -> None:
+    def test_provider_hooks_use_the_same_local_guard_without_checkout_paths(
+        self,
+    ) -> None:
         assert_ok(self, self.bootstrap())
         configs = (
             self.repo / ".claude/settings.local.json",
@@ -1636,9 +1740,13 @@ class SecretHookTests(RepositoryFixture):
         super().setUp()
         assert_ok(self, self.bootstrap())
 
-    def invoke(self, command: str = "git commit -m test") -> subprocess.CompletedProcess[bytes]:
+    def invoke(
+        self, command: str = "git commit -m test"
+    ) -> subprocess.CompletedProcess[bytes]:
         guard = self.repo / ".agent-project-kit/hooks/guard.py"
-        return run("python3", guard, "agent-hook", input_bytes=hook_input(command, self.repo))
+        return run(
+            "python3", guard, "agent-hook", input_bytes=hook_input(command, self.repo)
+        )
 
     def test_sensitive_filename_is_blocked(self) -> None:
         (self.repo / "credentials.json").write_text("placeholder\n")
@@ -1663,6 +1771,148 @@ class SecretHookTests(RepositoryFixture):
         assert_ok(self, git(self.repo, "add", "id_rsa.pub"))
         result = self.invoke()
         self.assertEqual(result.returncode, 0, output(result))
+
+
+class SchemaHistoryTests(unittest.TestCase):
+    def test_older_schema_allowlists_are_strict_subsets_of_current(self) -> None:
+        current_owned = set(kit_core.owned_paths())
+        current_lines = set(kit_core.exclude_lines())
+        for version in sorted(kit_core.SCHEMA_SKILLS)[:-1]:
+            self.assertLess(set(kit_core.owned_paths(version)), current_owned)
+            self.assertLess(set(kit_core.exclude_lines(version)), current_lines)
+
+    def test_unknown_schema_version_is_rejected(self) -> None:
+        with self.assertRaises(RuntimeError):
+            kit_core.owned_paths(99)
+
+    def test_skill_payloads_have_frontmatter_and_lifecycle_rules(self) -> None:
+        for name in SKILL_NAMES:
+            text = (ROOT / f"payload/skills/agent-kit-{name}/SKILL.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertTrue(text.startswith("---\n"), name)
+            self.assertIn(f"name: agent-kit-{name}", text)
+        sync = (ROOT / "payload/skills/agent-kit-skill-sync/SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        for token in (
+            "선언된 Agent 도구",
+            "삭제",
+            ".claude/skills/",
+            ".agents/skills/",
+        ):
+            self.assertIn(token, sync)
+        init = (ROOT / "payload/skills/agent-kit-init/SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        for token in ("인터뷰", "AGENTS.md", "CLAUDE.md", "승인"):
+            self.assertIn(token, init)
+        adopt = (ROOT / "payload/skills/agent-kit-adopt/SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        for token in ("병합", "AGENTS.md", "승인"):
+            self.assertIn(token, adopt)
+
+    def test_claude_template_is_pointer_only(self) -> None:
+        text = (ROOT / "payload/templates/CLAUDE.template.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("@AGENTS.md", text)
+        self.assertLess(len(text.splitlines()), 10)
+
+
+class SchemaMigrationTests(RepositoryFixture):
+    def install_legacy_v1(self) -> None:
+        legacy_kit = self.base / "legacy-kit"
+        shutil.copytree(
+            ROOT / "payload",
+            legacy_kit / "payload",
+            ignore=shutil.ignore_patterns("__pycache__", ".DS_Store"),
+        )
+        shutil.rmtree(legacy_kit / "payload/templates")
+        shutil.rmtree(legacy_kit / "payload/skills/agent-kit-skill-sync")
+        root, common = kit_core.find_repository(str(self.repo))
+        with mock.patch.object(kit_core, "SCHEMA_VERSION", 1):
+            self.assertEqual(kit_core.install(legacy_kit, root, common, "install"), 0)
+        manifest = json.loads(manifest_path(self.repo).read_text(encoding="utf-8"))
+        self.assertEqual(manifest["schema_version"], 1)
+
+    def test_v1_install_upgrades_in_place_and_uninstalls_cleanly(self) -> None:
+        exclude = git_common_dir(self.repo) / "info/exclude"
+        original_exclude = exclude.read_bytes() if exclude.exists() else None
+        before = status(self.repo)
+        self.install_legacy_v1()
+        self.assertFalse(
+            (self.repo / ".agent-project-kit/templates/AGENTS.template.md").exists()
+        )
+
+        assert_ok(self, self.bootstrap())
+
+        manifest = json.loads(manifest_path(self.repo).read_text(encoding="utf-8"))
+        self.assertEqual(manifest["schema_version"], kit_core.SCHEMA_VERSION)
+        self.assertEqual(manifest["kit_version"], kit_core.KIT_VERSION)
+        for rel in OWNED_PATHS:
+            self.assertTrue((self.repo / rel).is_file(), rel)
+        data = exclude.read_bytes()
+        self.assertEqual(data.count(kit_core.BLOCK_START.encode("utf-8")), 1)
+        self.assertIn(b"/.claude/skills/agent-kit-skill-sync/", data)
+        self.assertIn(kit_core.expected_exclude_block().encode("utf-8"), data)
+        self.assertEqual(status(self.repo), before)
+        assert_ok(self, self.bootstrap("--doctor"))
+
+        assert_ok(self, self.bootstrap("--uninstall"))
+        for rel in OWNED_PATHS:
+            self.assertFalse((self.repo / rel).exists(), rel)
+        self.assertFalse(manifest_path(self.repo).exists())
+        if original_exclude is None:
+            self.assertFalse(exclude.exists())
+        else:
+            self.assertEqual(exclude.read_bytes(), original_exclude)
+
+    def test_v1_install_is_uninstallable_directly_with_current_kit(self) -> None:
+        self.install_legacy_v1()
+        assert_ok(self, self.bootstrap("--uninstall"))
+        for rel in kit_core.owned_paths(1):
+            self.assertFalse((self.repo / rel).exists(), rel)
+        self.assertFalse(manifest_path(self.repo).exists())
+
+
+class SharedDocumentCommitTests(RepositoryFixture):
+    def write_shared_docs_and_user_skill(self) -> Path:
+        (self.repo / "AGENTS.md").write_text(
+            "# AGENTS.md — sample\n\n규칙은 이 파일에만 적는다.\n"
+        )
+        (self.repo / "CLAUDE.md").write_text("@AGENTS.md\n")
+        for provider in (".claude", ".agents"):
+            skill = self.repo / provider / "skills/team-review/SKILL.md"
+            skill.parent.mkdir(parents=True, exist_ok=True)
+            skill.write_text("---\nname: team-review\n---\n동일 원본 사용자 스킬\n")
+        return self.repo / ".claude/skills/team-review/SKILL.md"
+
+    def test_shared_docs_and_user_skills_commit_while_kit_paths_stay_out(self) -> None:
+        assert_ok(self, self.bootstrap())
+        self.write_shared_docs_and_user_skill()
+        assert_ok(self, git(self.repo, "add", "-A"))
+        staged = staged_paths(self.repo)
+        self.assertIn("AGENTS.md", staged)
+        self.assertIn("CLAUDE.md", staged)
+        self.assertIn(".claude/skills/team-review/SKILL.md", staged)
+        self.assertIn(".agents/skills/team-review/SKILL.md", staged)
+        self.assertFalse(sorted(set(staged) & set(OWNED_PATHS)))
+        assert_ok(self, git(self.repo, "commit", "-qm", "docs: shared guidance"))
+        tree = output(git(self.repo, "ls-tree", "--name-only", "-r", "HEAD"))
+        self.assertIn("AGENTS.md", tree)
+        self.assertIn("CLAUDE.md", tree)
+        self.assertNotIn("agent-kit-", tree)
+        self.assertNotIn(".agent-project-kit", tree)
+
+    def test_uninstall_preserves_user_shared_docs_and_skills(self) -> None:
+        assert_ok(self, self.bootstrap())
+        user_skill = self.write_shared_docs_and_user_skill()
+        assert_ok(self, self.bootstrap("--uninstall"))
+        self.assertTrue((self.repo / "AGENTS.md").is_file())
+        self.assertTrue((self.repo / "CLAUDE.md").is_file())
+        self.assertTrue(user_skill.is_file())
 
 
 if __name__ == "__main__":

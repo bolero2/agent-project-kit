@@ -47,19 +47,23 @@ git -C /path/to/new-project status --short
 Claude Code 또는 Codex 중 편한 도구를 프로젝트 루트에서 연다.
 
 ```text
-agent-kit-init 스킬을 사용해 저장소를 탐색하고 CONTEXT.md와 첫 HANDOFF.md를 완성해 줘.
+agent-kit-init 스킬을 사용해 줘. 프로젝트 인터뷰를 진행해서 AGENTS.md와 포인터 CLAUDE.md를
+만들고, 저장소를 탐색해 CONTEXT.md와 첫 HANDOFF.md를 완성해 줘.
 관측 사실, 추론, 미확인을 구분하고 실행하지 않은 검사는 미실행으로 남겨 줘.
 ```
 
-확인할 내용:
+에이전트가 인터뷰로 묻는 내용:
 
-- 프로젝트 목표와 acceptance criteria
-- 실제 실행·테스트 명령
-- 민감 경로와 외부 업로드 금지 데이터
-- 중요한 결정과 알려진 지뢰
-- 첫 작업과 검증 anchor
+- 이 프로젝트가 해결하는 문제, 목표와 성공 기준
+- 주요 기술 스택과 실행 환경, 제약 조건
+- 사용할 Agent 도구 (기본: Claude Code, Codex — 그 외 도구는 이름과 규약을 물어 추가)
 
-이 정보는 `.agent-project-kit/`의 local-only state에 들어간다. setup 파일을 첫 커밋으로 만들지
+인터뷰 결과로 `AGENTS.md`(canonical 지침, 큰 그림 위주 — 세부 규칙은 진행하며 채움)와
+`AGENTS.md`를 참조만 하는 포인터 `CLAUDE.md` 초안이 제시되고, 승인하면 저장소 루트에
+생성된다. 이 두 파일은 공유 가능한 정보성 문서로 평소처럼 commit한다.
+
+탐색으로 확인하는 내용(실행·테스트 명령, 민감 경로, 알려진 지뢰, 첫 작업과 검증 anchor)은
+`.agent-project-kit/`의 local-only state에 들어간다. 킷 setup 파일 자체를 커밋으로 만들지
 않는다.
 
 ## 1-B. 진행 중인 프로젝트 편입
@@ -88,11 +92,14 @@ owned adapter 경로가 이미 사용 중이면 쓰기 전에 충돌로 중단�
 ```text
 agent-kit-adopt 스킬을 사용해 기존 AGENTS.md/CLAUDE.md와 저장소 구조, 현재 Git 상태,
 최근 결정, 실행·검증 방법을 읽고 local CONTEXT/HANDOFF에 편입해 줘.
-기존 tracked 파일은 setup 목적으로 수정하지 마.
+기존 규칙이 있으면 AGENTS.md 기준 canonical+포인터 구조로 병합 개편안을 diff로 제시해 줘.
+내 승인 없이 tracked 파일을 수정하지 마.
 ```
 
-에이전트가 기존 규칙과 공통 규칙의 충돌을 발견하면 임의로 지우지 않고 차이를 보고해야 한다.
-사용자가 선택한 결과만 local context에 기록한다.
+에이전트는 기존 두 파일의 규칙을 `AGENTS.md`로 모으고 `CLAUDE.md`를 포인터로 교체하는
+개편안을 제시한다. 충돌·중복 항목은 임의로 지우지 않고 차이를 보고하며, 사용자가 선택·승인한
+결과만 반영한다. 개편을 원하지 않으면 기존 구조를 그대로 두고 그 사실만 CONTEXT에 남긴다.
+승인 하에 개편된 `AGENTS.md`/`CLAUDE.md`는 tracked 변경으로 보이는 것이 정상이다.
 
 ## 2. 평소 작업
 

@@ -37,7 +37,8 @@ flowchart LR
 
 - 짧은 작업 원칙과 컨텍스트 로딩 순서
 - `CONTEXT.md`, `HANDOFF.md`
-- 초기화, 편입, handoff, wrap-up 스킬
+- 초기화, 편입, handoff, wrap-up, skill-sync 스킬
+- `AGENTS.md`(canonical)·`CLAUDE.md`(포인터) 생성·병합용 템플릿
 - staged/outgoing commit 및 시크릿 검사
 - 파괴적 shell 명령 탐지
 
@@ -99,16 +100,24 @@ AI 도구가 공식 탐색 경로에서 찾아야 하는 최소 파일만 둔다
   CONTEXT.md              # 짧은 공통 작업 계약과 비교적 안정적인 프로젝트 사실
   HANDOFF.md              # 현재 목표와 다음 행동
   hooks/guard.py          # Claude/Codex가 공유하는 runtime guard
+  templates/              # init/adopt가 쓰는 AGENTS.md·CLAUDE.md 템플릿 (local-only)
 ```
 
 대상 프로젝트가 추적하는 `docs/`, `AGENTS.md`, `CLAUDE.md`, `.gitignore`에는 킷 상태를 쓰지
-않는다. 에이전트가 작업 결과로 사용자의 프로젝트 문서를 수정하는 일은 별도 사용자 작업이며,
-킷 설치 행위와 구분한다.
+않는다. installer는 이 파일들을 절대 생성·수정하지 않는다. 공유 지침 문서의 생성·병합은
+`agent-kit-init`/`agent-kit-adopt` 스킬이 사용자 인터뷰와 명시적 승인 하에 수행하는 사용자
+작업이며, 그 산출물(`AGENTS.md`, `CLAUDE.md`)은 사용자 소유 tracked 문서로 commit이
+허용된다. 킷 guard는 킷 소유 경로만 차단하므로 이 두 파일의 commit을 막지 않는다.
 
 ### 4.2 Git common dir
 
 linked worktree에서도 공유해야 하는 설치 원장과 Git guard는 `$GIT_COMMON_DIR/agent-project-kit/`
 아래에 둔다.
+
+manifest의 `schema_version`은 배포 payload 구성이 바뀔 때마다 올린다. 과거 schema의
+allowlist(스킬·템플릿 목록, exclude line)는 코드에 동결되어 있어, 구버전 설치본은 기록된
+schema로 검증한 뒤 재설치로 업그레이드(managed exclude block만 교체)하거나 그대로 제거할
+수 있다.
 
 ```text
 agent-project-kit/
@@ -163,10 +172,11 @@ handoff의 최소 스키마:
 
 | 스킬 | 역할 | 주요 산출물 |
 |---|---|---|
-| `agent-kit-init` | 신규 프로젝트의 로컬 상태를 탐색·구체화 | `CONTEXT.md`, 첫 `HANDOFF.md` |
-| `agent-kit-adopt` | 진행 중인 프로젝트의 현재 상태를 무손상 편입 | 기존 규칙 맵, 검증 기준, 다음 작업 |
+| `agent-kit-init` | 사용자 인터뷰로 공유 지침 생성 + 신규 프로젝트 로컬 상태 구체화 | 승인된 `AGENTS.md`+포인터 `CLAUDE.md`, `CONTEXT.md`, 첫 `HANDOFF.md` |
+| `agent-kit-adopt` | 진행 중인 프로젝트의 현재 상태를 무손상 편입, 승인 하에 지침 병합 개편 | 병합 개편안(diff), 기존 규칙 맵, 검증 기준, 다음 작업 |
 | `agent-kit-handoff` | Claude↔Codex 또는 새 세션으로 작업 전달 | 최신 `HANDOFF.md` |
 | `agent-kit-wrap-up` | 마일스톤/세션을 정리하고 미완료만 활성 상태에 유지 | 최신 handoff |
+| `agent-kit-skill-sync` | 사용자 스킬을 선언된 모든 Agent 도구 경로에 동기화 | 도구별 동일 원본 스킬, 검증 보고 |
 
 스킬 우선순위는 provider마다 다르다. Claude Code는 같은 이름에서 enterprise → personal →
 project 순이고, 이 세 범위의 스킬은 bundled skill을 대체한다. Codex는 같은 `name`을 병합하지
