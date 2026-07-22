@@ -41,7 +41,8 @@ fi
 
 # 동기화 대상(.claude/) 파일 목록 — 복사·비교가 같은 목록을 쓴다
 kit_claude_files() {
-  find "$KIT_DIR/.claude" -type f ! -name '.DS_Store' ! -name 'settings.local.json' | sort
+  find "$KIT_DIR/.claude" -type f ! -name '.DS_Store' ! -name 'settings.local.json' \
+    ! -name '*.pyc' ! -path '*/__pycache__/*' | sort
 }
 
 # ──────────────────────────────── --diff 모드 ────────────────────────────────

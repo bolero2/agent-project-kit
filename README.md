@@ -37,7 +37,8 @@
 | `.claude/skills/claude-md-init/` | CLAUDE.md TBD 채우기 (repo 탐색 + 인터뷰) | 그대로 |
 | `.claude/skills/_template/SKILL.template.md` | 프로젝트 스킬 템플릿 — `SKILL.md`로 개명 전까지 비활성 | 그대로 |
 | `.claude/agents/commit-push.md` | git 커밋 잡일 위임 (haiku, 민감파일 제외 내장) | 그대로 |
-| `.claude/settings.json` | 권한 시드 (아래 참조) | 그대로 |
+| `.claude/settings.json` | 권한 시드 + 훅 연결 (아래 참조) | 그대로 |
+| `.claude/hooks/` | 안전 훅 2종 — 파괴 명령 차단(PreToolUse), 시크릿 커밋 검출(Stop) | 그대로 |
 | `templates/gitignore` | .gitignore 베이스 — 비밀·데이터·모델 선차단 | `.gitignore` |
 | `templates/change-log-README.md` | change-log 인덱스 스텁 | `docs/change-log/README.md` |
 | `README.md` · `GETTING-STARTED.md` · `bootstrap.sh` · `docs/` | 킷 자체용 | (복사 안 됨) |
@@ -53,9 +54,21 @@
 | deny | `.env*`, `*.pem`, `id_rsa*`, `secrets/` **읽기 차단** | 비밀이 대화·로그로 새는 것 방지. Read deny 규칙은 Claude Code가 인식하는 `cat`/`head`/`tail` 등 Bash 읽기 명령도 차단한다 |
 | deny | `git push --force` / `-f` | 원격 이력 파괴 방지. deny는 allow/ask보다 우선한다 |
 
-한계: 임의 서브프로세스(예: 파이썬 스크립트가 직접 파일을 여는 경우)까지는 막지 못한다 —
-`.gitignore`와 CLAUDE.md §0-4가 이중 방어. 프로젝트 사정에 맞게 수정해서 쓴다.
-개인용 `.claude/settings.local.json`은 Claude Code가 자동으로 git 제외 처리한다.
+여기에 **안전 훅 2종**(`.claude/hooks/`, python3 필요)이 3번째 층을 더한다:
+
+- `block-dangerous-bash.py` (PreToolUse): `rm -rf` 계열(분리 플래그 `-r -f` 포함),
+  `curl | sh`, force push 전 어순, `chmod 777`, DB 클라이언트의 `DROP` 을 토큰/정규식
+  분석으로 차단 — deny 프리픽스 매칭이 놓치는 변형을 잡는다.
+- `verify-no-secrets.sh` (Stop): 턴 종료 시 스테이징된 파일명(.env, *.pem, id_rsa* 등)과
+  **인덱스 내용**(AWS/GitHub/Slack 키, 개인키 헤더)을 검사해 커밋 전에 잡는다.
+  `.env.example`은 허용.
+
+방어 층 정리: ①`.gitignore`(예방) ②권한 deny(읽기 차단) ③안전 훅(실행/커밋 차단) +
+CLAUDE.md §0-4(규칙). 임의 서브프로세스가 직접 파일을 여는 것까지는 못 막으므로 층을 겹친다.
+프로젝트 사정에 맞게 수정해서 쓴다. 개인용 `.claude/settings.local.json`은 Claude Code가
+자동으로 git 제외 처리한다.
+
+주의: 훅이 활성화되면 에이전트는 `rm -rf`를 쓸 수 없다 — 임시 정리는 `-f` 없이 `rm -r`.
 
 ## 다른 AI 도구와 병용 (AGENTS.md)
 
