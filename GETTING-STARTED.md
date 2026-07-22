@@ -92,8 +92,8 @@ mv .claude/skills/<스킬이름>/SKILL.template.md .claude/skills/<스킬이름>
 ## 요약 한 장
 
 ```
-[수동]   git init → bootstrap.sh → .gitignore 프로젝트에 맞게 수정
-[세션1]  /claude-md-init → CLAUDE.md·권한시드 검토 → 첫 커밋(CLAUDE.md+.claude+.gitignore+docs)
-[매세션] 반복지시→스킬화 / 새규칙→§0 / 반증→정정 기록 / change-log 기록
-[종료]   TODO 현행화 → 범용 패턴은 킷으로 역수출
+[신규]   git init → bootstrap.sh → .gitignore 수정 → /claude-md-init → 첫 커밋
+[기존]   bootstrap.sh --adopt → /kit-adopt → 검토 후 커밋
+[매세션] 반복지시→스킬화 / 새규칙→§0 / 반증→정정 기록 / 훅·deny가 자동 방어
+[종료]   /wrap-up (TODO 현행화·change-log·역수출 점검) → 수시로 --doctor 점검
 ```
