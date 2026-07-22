@@ -148,3 +148,14 @@ v1 설치본의 in-place 업그레이드/직접 제거(SchemaMigrationTests 2), 
 - 결과 기록 규칙: 수행 결과는 `docs/test/{YYYY-MM-DD}.md`에 남기고, 대화형 시나리오의 첫
   실전 통과는 `AGENTS.md` §8 smoke test 항목에 반영한다.
 - 파일: `docs/acceptance-test.md`(신규), `README.md`, `AGENTS.md`(문서 맵)
+
+## [FIX] 템플릿 commit 경계 명문화 + handoff 왕복 첫 실전 검증
+
+- 실측: test-proj에서 Claude Code → Codex handoff 왕복 smoke test 통과(블라인드 질문으로
+  자동 발견·상태 복원·기록-실제 불일치 교정 확인). 스킬 팬아웃 두 사본 diff 0.
+- 결함: init이 생성한 대상 `AGENTS.md`가 "킷 파일 커밋 금지"를 "`.claude/`·`.agents/` 전체
+  커밋 금지"로 과잉 일반화 → 사용자 스킬 커밋 방침(HANDOFF)과 충돌(Codex가 발견).
+- 수정: `AGENTS.template.md` §3에 킷 소유/사용자 소유 commit 경계 문구 추가,
+  `agent-kit-init` 3단계에 과잉 일반화 금지 지침 추가. schema 변경 없음(경로 불변,
+  재설치로 내용 갱신).
+- 기록: `docs/test/2026-07-22.md`(신규 — 수동 smoke test 리포트), `AGENTS.md` §8 갱신.

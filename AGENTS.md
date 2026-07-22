@@ -160,7 +160,11 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 - [x] 공유 지침 문서 라이프사이클: 템플릿 배포 + init 인터뷰 생성 + adopt 병합 개편 절차
 - [x] 사용자 스킬 팬아웃(`agent-kit-skill-sync`)과 Agent 도구 레지스트리(CONTEXT)
 - [x] manifest schema v1→v2 업그레이드 경로와 회귀 테스트 78개 통과
-- [ ] init 인터뷰·adopt 병합·skill-sync의 실제 Claude Code/Codex 대화형 smoke test
+- [x] handoff 왕복 smoke test — 2026-07-22 test-proj에서 Codex 블라인드 질문으로 통과,
+  스킬 팬아웃 parity(diff 0)도 실측. 결함 1건(템플릿 commit 경계 모호) 발견·수정.
+  기록: `docs/test/2026-07-22.md`
+- [ ] 남은 대화형 smoke test: init 인터뷰 절차 관찰, adopt 병합 diff·승인 흐름,
+  skill-sync의 Codex 실행 검증, 수정된 템플릿 기반 신규 init 재검증
 - 릴리스 단계에서 repository-local `bolero2` author로 `master`에 commit/push하고 CI를 확인한다.
 
 ## 9. 환경

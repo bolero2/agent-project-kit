@@ -23,6 +23,11 @@
 
 - 사용하는 도구: {{인터뷰로 채움 — 기본: Claude Code, Codex}}
 - 사용자 스킬·규칙은 선언된 모든 도구에 동일하게 반영한다(생성·수정·삭제 포함).
+- commit 경계: 킷 로컬 하네스 파일(`.agent-project-kit/`, `CLAUDE.local.md`,
+  `AGENTS.override.md`, `agent-kit-*` 스킬, provider hook 설정)만 commit하지 않는다.
+  사용자 스킬(`.claude/skills/<name>/`, `.agents/skills/<name>/`)은 킷 소유가 아니며
+  프로젝트 결정에 따라 commit할 수 있다. `.claude/`·`.agents/` 디렉터리 전체를 커밋
+  금지로 일반화하지 않는다.
 
 ## 4. 실행과 검증
 
