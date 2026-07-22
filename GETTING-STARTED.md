@@ -1,99 +1,311 @@
-# 새 프로젝트 시작 절차 (Claude Code 협업 기준)
+# agent-project-kit 시작 가이드
 
-> 순서대로 하면 된다. ☐ 는 체크리스트.
-> **이미 진행 중인 프로젝트를 편입하는 경우**는 Phase 0~1 대신:
-> `bootstrap.sh --adopt <프로젝트>` → 그 프로젝트 세션에서 `/kit-adopt` → 검토 후 커밋.
-> 이후 Phase 2~3은 동일하게 적용된다.
+이 가이드는 신규 프로젝트 setup, 진행 중인 프로젝트 편입, Claude Code ↔ Codex 전환,
+진단과 제거까지 한 흐름으로 설명한다.
 
----
+## 0. 한 번만 준비
 
-## Phase 0 — 저장소 준비 (Claude 실행 전, 수동)
-
-☐ 프로젝트 디렉토리 생성 + `git init` (또는 clone)
-☐ **킷 복사** (이미 있는 파일은 덮어쓰지 않으므로 재실행 안전):
 ```bash
-<킷 체크아웃 경로>/bootstrap.sh <프로젝트 경로>
-# 예: ~/main/github/claude-project-kit/bootstrap.sh ~/work/new-project
+git clone git@github.com:bolero2/agent-project-kit.git
+cd agent-project-kit
+python3 --version
+git --version
 ```
-☐ 복사된 `.gitignore` 베이스를 **프로젝트에 맞게 수정** — 데이터·모델·산출물·로그를
-   코드보다 먼저 막는다 (베이스에 비밀/자격증명·모델 가중치·언어별 섹션이 이미 있음)
-> 왜 먼저? 한 번이라도 커밋되면 히스토리에 남는다. 얼굴·개인정보 데이터는 특히.
 
----
+킷은 글로벌 설정을 설치하지 않는다. 각 대상 Git 프로젝트에 따로 실행한다.
 
-## Phase 1 — 첫 Claude Code 세션 (세팅 세션)
+## 1-A. 신규 프로젝트
 
-이 세션은 코딩하지 않는다. **세팅만 한다.**
+### 1. Git 저장소 준비
 
-☐ **1. `/claude-md-init` 실행**
-   - Claude가 repo 탐색(구조·실행법) + 인터뷰(아래 4개)를 진행
-   - 인터뷰에서 답할 것을 미리 준비:
-     1. 이 프로젝트는 무엇인가 (목표 한 문장, 발주처, 성공 기준)
-     2. 제약 (마감, 타깃 환경, 성능 요구치)
-     3. 보안 (외부 유출 금지 대상 — 경로 단위로)
-     4. 외부 문서 (Confluence/Jira 위치)
-   - 결과: CLAUDE.md의 TBD가 채워짐. **모르는 건 TBD로 남기게 둔다** (지어내지 못하게)
-
-☐ **2. CLAUDE.md 직접 검토**
-   - §0 RULE이 그대로 있는지
-   - §0-4/§5 보안(유출 금지 경로)이 .gitignore와 일치하는지
-   - 프로젝트 고유 규칙이 더 있으면 지금 §0에 추가 지시
-
-☐ **3. 권한 시드 검토** — `.claude/settings.json`
-   - §5의 민감 경로를 deny에 추가: `"Read(/<민감경로>/**)"`
-   - 프로젝트에서 자주 쓰는 읽기 전용 명령을 allow에 추가
-
-☐ **4. 첫 커밋**: `CLAUDE.md` + `.claude/` + `.gitignore` + `docs/`
-   - 이게 첫 커밋이어야 이후 모든 세션·팀원이 규칙 위에서 시작한다
-
-☐ **5. (해당 시) 접근 수단 확인**
-   - git 원격/계정, 사내 문서 접근, GPU/보드 등 — 안 되는 게 있으면 지금 확인
-   - 토큰은 절대 파일·git config에 저장하지 않는다 (인라인 1회 사용 원칙)
-
----
-
-## Phase 2 — 작업 중 운영 규칙 (매 세션)
-
-☐ **반복 지시 2회째 → 즉시 스킬화**
 ```bash
-cp -r .claude/skills/_template .claude/skills/<스킬이름>
-mv .claude/skills/<스킬이름>/SKILL.template.md .claude/skills/<스킬이름>/SKILL.md
+mkdir -p /path/to/new-project
+git -C /path/to/new-project init
 ```
-   - "매번 같은 걸 지시 = 토큰 낭비"의 해결책. 개명 전까지는 스킬로 등록되지 않는다.
 
-☐ **새 규칙이 생기면 → 그 자리에서 CLAUDE.md §0에 추가**
-   - "이건 중요하니까 규칙으로" 를 두 번 말하게 하지 않기
+이미 clone한 저장소라면 이 단계는 생략한다. 아직 Git 저장소가 아닌 디렉터리에는 킷을
+설치하지 않는다. commit 격리를 검증할 기준이 없기 때문이다.
 
-☐ **CLAUDE.md 갱신 트리거** (§0-3):
-   - 주요 결정 확정/번복 · 실측으로 기존 기록 반증 · 지뢰 발견 · 스코프 변경 · 마일스톤 완료
-   - 틀린 기록은 삭제가 아니라 "정정(날짜)" 로 남긴다
+### 2. 설치
 
-☐ **문서/보고서 작성 시** (§0-2): 재현 명령어 4요소(전제·명령·출력해석·검증앵커) 필수
-
-☐ **의미 있는 작업 완료 시** → `docs/change-log/YYYY-MM-DD.md` 기록 + README 인덱스 갱신
-
-☐ **git 잡일은 commit-push 에이전트에 위임** (메인 대화 토큰 절약)
-
----
-
-## Phase 3 — 세션/마일스톤 종료 시
-
-☐ **`/wrap-up` 실행** — 아래 절차를 스킬이 순서대로 수행한다:
-   - CLAUDE.md §8 (완료/미완료 TODO) 현행화 + §3/§7 해당분 반영
-   - change-log 기록 (재현 명령어 4요소)
-   - 확립된 **범용** 패턴의 킷(claude-project-kit) 역수출 후보 보고
-   - 반복 지시 2회 이상 → 스킬화 후보 보고
-☐ 킷이 그간 갱신됐다면 `<킷>/bootstrap.sh --diff <이 프로젝트>`로 차이 확인 → 선별 반영
-☐ 수시로 `<킷>/bootstrap.sh --doctor <이 프로젝트>` — 하네스 무결성 점검 (change-log 공백 감지 포함)
-☐ 커밋 (푸시는 민감파일 스캔 후)
-
----
-
-## 요약 한 장
-
+```bash
+/path/to/agent-project-kit/bootstrap.sh /path/to/new-project
 ```
-[신규]   git init → bootstrap.sh → .gitignore 수정 → /claude-md-init → 첫 커밋
-[기존]   bootstrap.sh --adopt → /kit-adopt → 검토 후 커밋
-[매세션] 반복지시→스킬화 / 새규칙→§0 / 반증→정정 기록 / 훅·deny가 자동 방어
-[종료]   /wrap-up (TODO 현행화·change-log·역수출 점검) → 수시로 --doctor 점검
+
+정상 종료 시 기존 project file이나 `.gitignore`가 setup 때문에 바뀌어서는 안 된다.
+
+```bash
+git -C /path/to/new-project status --short
+/path/to/agent-project-kit/bootstrap.sh --doctor /path/to/new-project
 ```
+
+킷 파일은 local exclude되므로 `git status`에 나타나지 않는다. 사용자가 설치 전에 가지고 있던
+변경은 그대로 나타나는 것이 정상이다.
+
+### 3. 첫 에이전트 세션
+
+Claude Code 또는 Codex 중 편한 도구를 프로젝트 루트에서 연다.
+
+```text
+agent-kit-init 스킬을 사용해 저장소를 탐색하고 CONTEXT.md와 첫 HANDOFF.md를 완성해 줘.
+관측 사실, 추론, 미확인을 구분하고 실행하지 않은 검사는 미실행으로 남겨 줘.
+```
+
+확인할 내용:
+
+- 프로젝트 목표와 acceptance criteria
+- 실제 실행·테스트 명령
+- 민감 경로와 외부 업로드 금지 데이터
+- 중요한 결정과 알려진 지뢰
+- 첫 작업과 검증 anchor
+
+이 정보는 `.agent-project-kit/`의 local-only state에 들어간다. setup 파일을 첫 커밋으로 만들지
+않는다.
+
+## 1-B. 진행 중인 프로젝트 편입
+
+### 1. 현재 상태 확인
+
+```bash
+git -C /path/to/existing-project status --short
+git -C /path/to/existing-project rev-parse --show-toplevel
+```
+
+dirty/staged/untracked 변경이 있어도 설치기는 보존한다. 다만 현재 출력은 편입 후 비교할 수 있게
+기억해 둔다.
+
+### 2. 편입 설치
+
+```bash
+/path/to/agent-project-kit/bootstrap.sh --adopt /path/to/existing-project
+```
+
+설치기가 기존 `AGENTS.md`, `CLAUDE.md`, `.gitignore`, 프로젝트 tool config를 수정하면 실패다.
+owned adapter 경로가 이미 사용 중이면 쓰기 전에 충돌로 중단하는 것이 정상이다.
+
+### 3. 의미적 편입
+
+```text
+agent-kit-adopt 스킬을 사용해 기존 AGENTS.md/CLAUDE.md와 저장소 구조, 현재 Git 상태,
+최근 결정, 실행·검증 방법을 읽고 local CONTEXT/HANDOFF에 편입해 줘.
+기존 tracked 파일은 setup 목적으로 수정하지 마.
+```
+
+에이전트가 기존 규칙과 공통 규칙의 충돌을 발견하면 임의로 지우지 않고 차이를 보고해야 한다.
+사용자가 선택한 결과만 local context에 기록한다.
+
+## 2. 평소 작업
+
+세션 시작 시:
+
+1. 공통 context와 최신 handoff를 읽는다.
+2. branch, HEAD, dirty 상태를 실제 Git 명령으로 재확인한다.
+3. handoff와 다르면 관측 결과를 우선하고 handoff를 정정한다.
+4. 다음 작업 하나와 완료 조건을 확인한 뒤 구현한다.
+
+작업 중:
+
+- 결정적 테스트·타입·린트를 먼저 사용한다.
+- 설계·UX처럼 판단이 필요한 검토는 결정적 검사와 구분한다.
+- 전체 로그를 context에 붙이지 않고 실패 원인과 재현 명령을 남긴다.
+- 반복 지시는 프로젝트 local skill 후보로 만들되 `agent-kit-*` 기본 스킬을 무심코 덮어쓰지
+  않는다.
+- 제품 코드를 commit할 때 킷 파일을 수동 force-add하지 않는다.
+
+마무리할 때:
+
+```text
+agent-kit-wrap-up 스킬로 완료 이력을 압축하고, 검증 결과와 남은 작업을 최신화해 줘.
+```
+
+## 3. Claude Code에서 Codex로 넘기기
+
+Claude Code 세션이 끝나기 전에:
+
+```text
+agent-kit-handoff 스킬로 Codex가 이어서 작업할 수 있게 정리해 줘.
+```
+
+확인:
+
+```bash
+git status --short
+git rev-parse --short HEAD
+```
+
+같은 프로젝트에서 Codex를 열고:
+
+```text
+최신 agent-project-kit handoff를 읽고 Git 상태와 핵심 실패를 재확인한 뒤 Next 첫 작업을 계속해.
+```
+
+Codex는 `AGENTS.override.md`를 먼저 읽는다. 어댑터 지시에 따라 프로젝트의 기존 `AGENTS.md`가
+있으면 그것도 명시적으로 읽고 함께 준수한다.
+
+## 4. Codex에서 Claude Code로 넘기기
+
+Codex에서 같은 `agent-kit-handoff` 스킬을 실행한다. 그다음 프로젝트에서 Claude Code를 열고:
+
+```text
+최신 agent-project-kit handoff와 프로젝트 지침을 읽고, Git 상태를 재확인한 뒤 계속해.
+```
+
+Claude Code의 `CLAUDE.local.md`가 공통 context를 import한다. 기존 `CLAUDE.md`도 원래 방식대로
+유지된다.
+
+## 5. 진단과 업데이트
+
+### 읽기 전용 diff
+
+```bash
+/path/to/agent-project-kit/bootstrap.sh --diff /path/to/project
+```
+
+manifest 기준으로 누락, 내용 hash 차이, exclude/hook drift를 보여준다. 아무것도 수정하지 않는다.
+
+### 종합 doctor
+
+```bash
+/path/to/agent-project-kit/bootstrap.sh --doctor /path/to/project
+```
+
+최소 확인 항목:
+
+- manifest와 owned file hash
+- exact `info/exclude`
+- 킷 파일의 tracked/staged 여부
+- Git dispatcher와 pre-commit/pre-push
+- local/worktree `core.hooksPath`와 기존 hook chain 정보
+- 선택된 Git config managed block의 bytes·mode와 Git lock 충돌
+- Claude/Codex adapter와 skill parity
+- 사용자 수정 또는 삭제된 파일
+
+오류가 있으면 exit 1이다. 도구 trust 승인이나 조직 policy처럼 CLI가 확정할 수 없는 항목은
+경고·수동 확인으로 남긴다.
+
+### 킷 업데이트 후 재설치
+
+```bash
+git -C /path/to/agent-project-kit pull --ff-only
+/path/to/agent-project-kit/bootstrap.sh /path/to/project
+```
+
+설치 당시 hash와 같은 owned 파일만 안전하게 갱신한다. 사용자가 수정한 파일이 있으면 보존하고
+충돌을 보고한다. 먼저 `--diff`로 확인해도 된다.
+
+## 6. 제거
+
+```bash
+/path/to/agent-project-kit/bootstrap.sh --uninstall /path/to/project
+```
+
+제거기는 먼저 전체 상태를 검사한 뒤 모두 안전할 때만 한 번에 제거한다.
+
+- immutable owned 파일 hash, mutable state의 초기 baseline, managed exclude, hook 설정이 모두
+  설치 기록과 같아야 한다.
+- 하나라도 다르면 **어떤 파일·exclude·설정도 제거하지 않고** exit 1로 중단한다.
+- 깨끗하면 owned 파일과 초기 상태를 제거하고 `info/exclude`의 원래 bytes·mode 및 기존
+  local/worktree Git config의 원래 bytes·mode/비존재 상태를 복원한다.
+- 대상의 기존 프로젝트 파일과 후속 Git 설정 변경은 덮어쓰지 않는다.
+- 부모 디렉터리는 파일 allowlist의 소유 대상이 아니므로 자동 삭제하지 않는다. 제거 뒤 빈
+  `.claude`/`.agents`/`.codex`/`.agent-project-kit` 하위 디렉터리가 남을 수 있다.
+
+실제로 사용한 `CONTEXT.md`/`HANDOFF.md`는 보통 baseline과 다르므로 기본 uninstall이 안전하게
+중단한다. 이 상태를 보존하려면 먼저 저장소 밖의 안전한 위치에 복사하고, 킷 payload의 초기
+두 파일로 되돌린 뒤 uninstall을 다시 실행한다. 로컬 상태를 버릴지 명시적으로 결정하지 않은
+채 삭제하지 않는다.
+
+제거 후:
+
+```bash
+git -C /path/to/project status --short
+git -C /path/to/project config --local --get core.hooksPath || true
+git -C /path/to/project config --worktree --get core.hooksPath || true
+```
+
+중단 보고가 있으면 어떤 변경도 일어나지 않았으므로 내용을 검토한 뒤 보존·원복 여부를 정하고
+다시 실행한다.
+
+linked worktree도 대상이 될 수 있지만 같은 Git common dir에는 한 번에 한 worktree만 설치한다.
+다른 worktree로 옮길 때는 현재 대상에서 handoff를 보존한 뒤 uninstall하고 새 worktree에
+설치한다. 공통 exclude가 sibling에도 적용되므로 다른 live worktree에 킷 exact/reserved 경로의
+사용자 파일이 있거나 worktree에 접근할 수 없으면 설치·제거가 안전하게 중단된다.
+
+bare 저장소와 linked worktree가 함께 있고 local-scope hook을 공유하는 구성은 서버 훅 의미를
+바꿀 수 있어 설치하지 않는다. 필요한 경우 먼저 다음처럼 worktree config를 활성화한 뒤 대상
+linked worktree에 설치한다.
+
+```bash
+git -C /path/to/linked-worktree config extensions.worktreeConfig true
+/path/to/agent-project-kit/bootstrap.sh /path/to/linked-worktree
+```
+
+기존 hook은 설치 당시 경로로 고정하지 않는다. dispatcher가 호출될 때 현재 branch의
+`includeIf`까지 반영된 managed 값 직전 hook을 chain하므로 Claude/Codex 작업 중 branch를 바꿔도
+해당 branch의 원래 hook 의미를 유지한다.
+
+프로젝트 디렉터리 자체를 이동하거나 이름을 바꿀 때도 먼저 uninstall한다. 설치 원장이 절대
+경로를 사용하므로, 설치된 채 이동하면 이전 위치를 자동 추측해 제거하지 않는다. 새 PC·원격
+개발 환경·새 clone에는 ignored local 파일이 전달되지 않으므로 그 checkout에서 별도로 설치한다.
+
+## 7. 자주 만나는 충돌
+
+### “owned path already exists”
+
+`AGENTS.override.md`, `CLAUDE.local.md`, `.codex/hooks.json`,
+`.claude/settings.local.json`, `agent-kit-*` 스킬 또는 `.agent-project-kit/`을 다른 도구가 이미
+사용 중이다. 설치기는 소유권을 추측하지 않는다.
+
+1. 파일이 tracked인지 `git ls-files --error-unmatch <path>`로 확인한다.
+2. 어느 도구가 만든 파일인지 확인한다.
+3. 기존 동작을 보존하는 통합 방법을 사용자가 결정한다.
+4. 경로를 명시적으로 정리한 뒤 다시 설치한다.
+
+### “symlink component”
+
+owned path 또는 부모가 symlink다. 대상 밖 파일을 덮어쓸 수 있어 설치하지 않는다. 실제 링크
+목적을 확인하고 정상 디렉터리 구조에서 다시 시도한다.
+
+### 설치 뒤 Codex hook이 실행되지 않음
+
+Codex 프로젝트 trust와 hook hash 승인을 확인한다. 새 hash는 재승인이 필요할 수 있다. Git
+pre-commit/pre-push guard는 별도 계층이므로 `--doctor`로 함께 확인한다.
+
+### 설치 뒤 Claude hook이 실행되지 않음
+
+조직의 managed settings가 project hook을 제한하는지 확인한다. local settings가 충돌하면
+설치기는 원래 실패해야 하며 기존 파일을 덮어쓰지 않는다.
+
+### 킷 파일을 force-add함
+
+pre-commit이 차단하는 것이 정상이다. 다음처럼 index에서만 제거한다.
+
+```bash
+git restore --staged -- AGENTS.override.md CLAUDE.local.md .agent-project-kit
+```
+
+다른 owned path가 있으면 doctor 출력에 따라 함께 unstage한다. working file을 삭제할 필요는 없다.
+
+## 8. 완료 체크리스트
+
+- [ ] 신규 또는 adopt 설치가 exit 0
+- [ ] 설치 전후 사용자 `git status --short` 동일
+- [ ] `bootstrap.sh --doctor` 오류 0
+- [ ] Claude Code에서 공통 context와 4개 스킬 확인
+- [ ] Codex에서 기존 `AGENTS.md`, 공통 context, 4개 스킬 확인
+- [ ] 최초 handoff에 목표·Git·검증·다음 행동 기록
+- [ ] 테스트용 도구 전환 1회 수행
+- [ ] 제품 commit에 킷 소유 경로 0 확인
+- [ ] 실제 제품 UI의 trust/hook 승인 상태 확인
+
+## 9. 보장하지 않는 것
+
+- 고의적인 `git add -f` + 모든 `--no-verify` + hook 설정 변경까지 로컬에서 절대 차단
+- 조직 managed policy 우회
+- 프로젝트 고유 테스트·보안 정책의 자동 설계
+- 특정 모델 또는 에이전트 구성의 생산성 향상 퍼센트
+- 글로벌 스킬·플러그인 관리
+- Windows 또는 네트워크 파일시스템의 file-lock 동작
+- Git을 통해 다른 checkout으로 local context/handoff 자동 동기화
+
+이 항목이 필요하면 원격 CI, branch protection, secret scanning, 조직 정책을 별도로 구성한다.

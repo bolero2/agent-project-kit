@@ -1,7 +1,27 @@
-# 킷 저장소 자체용 (대상 프로젝트용 베이스는 templates/gitignore)
+# OS / editor
 .DS_Store
-.claude/settings.local.json
+
+# Python test/tool caches
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.pytest_cache/
+.coverage
+
+# Secrets (examples/templates are allowed explicitly)
 .env
 .env.*
-__pycache__/
-*.pyc
+!.env.example
+!.env.sample
+!.env.template
+*.pem
+*.p12
+
+# Optional local dogfooding state for this source repository
+/.agent-project-kit/
+/AGENTS.override.md
+/CLAUDE.local.md
+/.claude/settings.local.json
+/.codex/hooks.json
+/.agents/skills/agent-kit-*/
+/.claude/skills/agent-kit-*/
