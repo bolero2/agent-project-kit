@@ -68,9 +68,9 @@ Anthropic의 장기 실행 실험은 세션 압축만으로는 작업 연속성�
 ### 2.5 효율은 모델을 크게 쓰는 것보다 불필요한 컨텍스트와 반복을 줄이는 데서 나온다
 
 Anthropic은 단순한 에이전트 루프에서 시작해 측정된 실패가 있을 때만 복잡성을 추가하고,
-도구 출력은 토큰 효율적으로 설계하라고 권한다. 장기 실행용 다중 에이전트 구조도 비용이 매우
-높았으며 모델이 개선되면 일부 계층은 제거할 수 있다고 명시한다. 따라서 이 킷은 모델명을
-고정하지 않고 다음 정책을 사용한다.
+도구 출력은 토큰 효율적으로 설계하라고 권한다. 또한 다중 에이전트 구조는 토큰 소비가 매우
+크다고 보고하며(단일 채팅 대비 약 15배), 작업 가치가 그 비용을 정당화할 때만 경제성이 있다고
+설명한다. 따라서 이 킷은 모델명을 고정하지 않고 다음 정책을 사용한다.
 
 - 탐색·기계적 검사는 저비용 작업으로 분리한다.
 - 고난도 설계·모호한 판단에만 강한 모델과 긴 추론을 사용한다.
@@ -134,7 +134,7 @@ Git 공식 문서는 저장소에만 적용되고 공유할 필요가 없는 패
 | 공통 skill payload와 두 탐색 어댑터 | Open Agent Skills 사양 + Claude/Codex 공식 skill 경로 |
 | 기존 `AGENTS.md`/`CLAUDE.md` 무수정 | 프로젝트 고유 지침 보존 + Codex override 탐색 규칙 |
 | `info/exclude` + pre-commit + pre-push + doctor | Git 공식 ignore/hook 한계와 대상 프로젝트 커밋 격리 요구 |
-| 모델 비고정·측정 기반 복잡성 | Anthropic의 단순 루프·평가 기반 확장 원칙 |
+| 모델 비고정·측정 기반 복잡성 | Anthropic의 단순 루프·평가 기반 확장 원칙 + 다중 에이전트의 높은 토큰 비용 보고 |
 
 ## 5. 읽은 자료
 
@@ -145,6 +145,7 @@ Git 공식 문서는 저장소에만 적용되고 공유할 필요가 없는 패
 - [Anthropic — Harness design for long-running application development](https://www.anthropic.com/engineering/harness-design-long-running-apps)
 - [Anthropic — Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
 - [Anthropic — Building effective agents](https://www.anthropic.com/research/building-effective-agents)
+- [Anthropic — How we built our multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system)
 - [Claude Code — memory and project instructions](https://code.claude.com/docs/en/memory)
 - [Claude Code — settings](https://code.claude.com/docs/en/settings)
 - [Claude Code — skills](https://code.claude.com/docs/en/skills)
@@ -152,7 +153,7 @@ Git 공식 문서는 저장소에만 적용되고 공유할 필요가 없는 패
 - [Codex — AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
 - [Codex — skills](https://learn.chatgpt.com/docs/build-skills)
 - [Codex — hooks](https://learn.chatgpt.com/docs/hooks)
-- [Open Agent Skills specification](https://openagentskills.dev/specification)
+- [Open Agent Skills specification](https://openagentskills.dev/docs/specification)
 - [Git — gitignore](https://git-scm.com/docs/gitignore)
 - [Git — githooks](https://git-scm.com/docs/githooks)
 
