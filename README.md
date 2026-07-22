@@ -29,12 +29,31 @@
   채워지며 달라지는 파일(CLAUDE.md 등)은 존재만 확인한다. 차이/누락 있으면 exit 1.
 - 스크립트 없이 수동 복사 시: `CLAUDE.md`, `.claude/`, `templates/gitignore`(→`.gitignore`)를 직접 복사.
 
+## 기존 프로젝트 편입 (adopt)
+
+이미 진행 중인 프로젝트(Claude Code로 개발해 왔더라도)를 하네스로 편입한다:
+
+```bash
+# 1. 기계적 편입 — 클린 트리 요구(HEAD가 롤백 지점), 기존 파일 무손상
+<킷 체크아웃 경로>/bootstrap.sh --adopt <프로젝트 경로>
+#    → 훅·권한 시드·스킬 추가 + 기존 .gitignore에 누락된 보안 패턴만 append
+
+# 2. 의미적 편입 — 해당 프로젝트의 Claude Code 세션에서
+/kit-adopt
+#    → 기존 CLAUDE.md에 §0 삽입·기존 내용을 §1~9로 재배치(버리지 않음),
+#      기존 settings.json 병합, §5-보안 대조
+```
+
+- 모든 변경은 **미커밋 상태**로 남는다 — `git status`/`git diff`로 검토 후 커밋.
+- 기존 CLAUDE.md의 규칙이 §0과 충돌하면 스킬이 목록을 보여주고 사용자 결정을 받는다.
+
 ## 구성 — 무엇이 대상 프로젝트로 가나
 
 | 킷 파일 | 역할 | 복사 → 대상 경로 |
 |---|---|---|
 | `CLAUDE.md` (시드) | §0 RULE 완성 + §1~9 TBD | `CLAUDE.md` |
 | `.claude/skills/claude-md-init/` | CLAUDE.md TBD 채우기 (repo 탐색 + 인터뷰) | 그대로 |
+| `.claude/skills/kit-adopt/` | 진행 중 프로젝트를 하네스로 편입 (CLAUDE.md 재편·settings 병합) | 그대로 |
 | `.claude/skills/_template/SKILL.template.md` | 프로젝트 스킬 템플릿 — `SKILL.md`로 개명 전까지 비활성 | 그대로 |
 | `.claude/agents/commit-push.md` | git 커밋 잡일 위임 (haiku, 민감파일 제외 내장) | 그대로 |
 | `.claude/settings.json` | 권한 시드 + 훅 연결 (아래 참조) | 그대로 |
