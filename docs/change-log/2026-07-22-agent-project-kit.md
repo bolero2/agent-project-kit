@@ -138,3 +138,13 @@ v1 설치본의 in-place 업그레이드/직접 제거(SchemaMigrationTests 2), 
 `payload/skills/agent-kit-init|adopt/SKILL.md`, `payload/runtime/CONTEXT.md`,
 `scripts/agent_project_kit.py`, `tests/test_harness.py`, `AGENTS.md`, `README.md`,
 `GETTING-STARTED.md`, `docs/architecture.md`
+
+## [ADD] 수동 수용 테스트 가이드
+
+- `docs/acceptance-test.md` 신설: 시나리오 A~G(설치 격리, init 인터뷰, commit/push 차단,
+  adopt 병합, 스킬 팬아웃, handoff 왕복, 제거)를 기계 판정/사람 판정으로 구분하고 시나리오별
+  성공·실패 기준을 명시했다. 자동 회귀 테스트가 덮는 범위(A/C/G)와 수동 필수 범위(B/D/E/F)를
+  표로 구분했다.
+- 결과 기록 규칙: 수행 결과는 `docs/test/{YYYY-MM-DD}.md`에 남기고, 대화형 시나리오의 첫
+  실전 통과는 `AGENTS.md` §8 smoke test 항목에 반영한다.
+- 파일: `docs/acceptance-test.md`(신규), `README.md`, `AGENTS.md`(문서 맵)

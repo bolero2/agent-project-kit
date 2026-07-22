@@ -134,6 +134,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 - 조사와 출처 판정: `docs/research/harness-engineering.md`
 - 사용자 시작 절차: `GETTING-STARTED.md`
 - 설계·보안 계약: `docs/architecture.md`
+- 수동 수용 테스트 절차: `docs/acceptance-test.md`
 - 변경 이력: `docs/change-log/README.md`
 
 ## 7. 주의사항

@@ -304,8 +304,9 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 > 생성 commit tree의 킷 소유 경로는 0개이고 기존 tracked 파일의 setup 유발 변경도 0개다.
 
 실제 제품 trust UI와 managed policy까지 포함한 Claude Code/Codex smoke test는 자동 테스트와
-별도로 기록한다. 구현 근거와 과장하지 않는 범위는
-[하네스 엔지니어링 조사](docs/research/harness-engineering.md)를 참고한다.
+별도로 기록한다. 대화형 플로우(init 인터뷰, adopt 병합, skill-sync, handoff 왕복)를 포함한
+사람 판정 절차는 [수동 수용 테스트 가이드](docs/acceptance-test.md)를 따른다. 구현 근거와
+과장하지 않는 범위는 [하네스 엔지니어링 조사](docs/research/harness-engineering.md)를 참고한다.
 
 ## 로컬 범위와 이동 제한
 
