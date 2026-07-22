@@ -22,6 +22,9 @@
 
 # (선택) 킷이 갱신된 뒤, 기존 프로젝트와의 차이 확인 — 아무것도 수정하지 않음
 <킷 체크아웃 경로>/bootstrap.sh --diff <프로젝트 경로>
+
+# (선택) 하네스 무결성 점검 — §0 존재·settings/훅 상태·민감 파일 추적·change-log 최신성
+<킷 체크아웃 경로>/bootstrap.sh --doctor <프로젝트 경로>   # 오류 시 exit 1
 ```
 
 - `bootstrap.sh`는 **이미 존재하는 파일을 절대 덮어쓰지 않는다**(SKIP 표시) — 재실행 안전.
@@ -54,6 +57,7 @@
 | `CLAUDE.md` (시드) | §0 RULE 완성 + §1~9 TBD | `CLAUDE.md` |
 | `.claude/skills/claude-md-init/` | CLAUDE.md TBD 채우기 (repo 탐색 + 인터뷰) | 그대로 |
 | `.claude/skills/kit-adopt/` | 진행 중 프로젝트를 하네스로 편입 (CLAUDE.md 재편·settings 병합) | 그대로 |
+| `.claude/skills/wrap-up/` | 세션 마무리 — §8 현행화·change-log·역수출 점검·커밋 제안 | 그대로 |
 | `.claude/skills/_template/SKILL.template.md` | 프로젝트 스킬 템플릿 — `SKILL.md`로 개명 전까지 비활성 | 그대로 |
 | `.claude/agents/commit-push.md` | git 커밋 잡일 위임 (haiku, 민감파일 제외 내장) | 그대로 |
 | `.claude/settings.json` | 권한 시드 + 훅 연결 (아래 참조) | 그대로 |

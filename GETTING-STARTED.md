@@ -78,9 +78,13 @@ mv .claude/skills/<스킬이름>/SKILL.template.md .claude/skills/<스킬이름>
 
 ## Phase 3 — 세션/마일스톤 종료 시
 
-☐ CLAUDE.md §8 (완료/미완료 TODO) 현행화
-☐ 확립된 **범용** 패턴이 있으면 킷(claude-project-kit)에도 반영 (다음 프로젝트 재사용)
+☐ **`/wrap-up` 실행** — 아래 절차를 스킬이 순서대로 수행한다:
+   - CLAUDE.md §8 (완료/미완료 TODO) 현행화 + §3/§7 해당분 반영
+   - change-log 기록 (재현 명령어 4요소)
+   - 확립된 **범용** 패턴의 킷(claude-project-kit) 역수출 후보 보고
+   - 반복 지시 2회 이상 → 스킬화 후보 보고
 ☐ 킷이 그간 갱신됐다면 `<킷>/bootstrap.sh --diff <이 프로젝트>`로 차이 확인 → 선별 반영
+☐ 수시로 `<킷>/bootstrap.sh --doctor <이 프로젝트>` — 하네스 무결성 점검 (change-log 공백 감지 포함)
 ☐ 커밋 (푸시는 민감파일 스캔 후)
 
 ---

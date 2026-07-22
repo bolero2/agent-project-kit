@@ -1,5 +1,7 @@
 # 킷 저장소 자체용 (대상 프로젝트용 베이스는 templates/gitignore)
 .DS_Store
 .claude/settings.local.json
+.env
+.env.*
 __pycache__/
 *.pyc
