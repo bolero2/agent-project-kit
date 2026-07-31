@@ -39,6 +39,7 @@ flowchart LR
 - `CONTEXT.md`, `HANDOFF.md`
 - 초기화, 편입, handoff, wrap-up, skill-sync 스킬
 - `AGENTS.md`(canonical)·`CLAUDE.md`(포인터) 생성·병합용 템플릿
+- 커스텀 Agent 본문(review-killer, developer)과 `AGENT-RULES.md` 공통 계약
 - staged/outgoing commit 및 시크릿 검사
 - 파괴적 shell 명령 탐지
 
@@ -50,8 +51,14 @@ provider 이름이 필요한 파일 경로와 hook event 형식은 어댑터에�
 |---|---|---|---|
 | 프로젝트 지침 | `CLAUDE.local.md` | `AGENTS.override.md`가 기존 `AGENTS.md`를 명시적으로 추가 로드 | 공통 core/handoff를 가리킴 |
 | 스킬 발견 | `.claude/skills/<name>/SKILL.md` | `.agents/skills/<name>/SKILL.md` | 동일 payload에서 생성 |
+| 커스텀 Agent | `.claude/agents/<name>.md` | `.codex/agents/<name>.toml` (설치 시 TOML 렌더링) | 동일 `AGENT.md` payload + `AGENT-RULES.md` 공통 계약 |
 | 프로젝트 훅 | `.claude/settings.local.json` | `.codex/hooks.json` | 동일 Python guard 호출 |
 | 세션 상태 | `.agent-project-kit/CONTEXT.md`, `HANDOFF.md` | 같은 경로 | 단일 원본 |
+
+커스텀 Agent의 모델은 도구별로 지정한다(Claude Code `opus`, Codex `gpt-5.6-sol`/high).
+Agent 본문은 "상위 모델 필요 시 재가동 요청"으로 중립화되어 있고, 두 도구 모두 명시 호출
+방식이다. Codex TOML은 설치기가 frontmatter를 해석해 `developer_instructions`에 같은 본문을
+넣어 생성하며, 테스트가 tomllib round-trip으로 본문 동일성을 검증한다.
 
 Codex의 `AGENTS.override.md`는 같은 디렉터리의 `AGENTS.md`를 대체한다. 설치하는 얇은
 어댑터는 이 사실을 숨기지 않고 기존 `AGENTS.md`가 있으면 먼저 도구로 읽고 함께 준수하도록

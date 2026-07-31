@@ -8,7 +8,7 @@ description: 세션을 증거 기반으로 마무리하고 다음 도구가 바�
 1. 요청 범위의 변경과 `git diff --check`를 확인한다.
 2. 위험에 비례한 테스트·lint·typecheck 중 실제로 필요한 검증을 실행한다.
 3. 실패와 미실행 검증을 숨기지 않는다.
-4. `agent-kit-handoff` 절차로 HANDOFF를 갱신한다.
+4. `agent-kit-handoff` 절차로 HANDOFF를 갱신한다(`HANDOFF.md.lock` 규약 포함).
 5. staged 파일을 확인하고 로컬 하네스 경로와 비밀이 없는지 검증한다.
 6. 커밋/푸시는 사용자의 권한과 프로젝트 절차가 있을 때만 수행한다.
 

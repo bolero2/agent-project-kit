@@ -8,6 +8,8 @@ description: Claude Code와 Codex 사이 또는 새 세션으로 전환할 수 �
 도구 전환, 세션 종료, 컨텍스트 한도 접근 전에 수행한다.
 
 1. `.agent-project-kit/HANDOFF.md`를 현재 사실로 교체한다. 완료 이력을 끝없이 누적하지 않는다.
+   갱신 전 `HANDOFF.md.lock`을 확인한다. lock이 있으면 다른 Agent의 갱신이 끝날 때까지
+   대기하고, 갱신 시 lock을 만들고 마친 뒤 즉시 삭제한다.
 2. 다음 항목을 짧고 구체적으로 기록한다.
    - 갱신 시각과 출발 도구
    - branch, HEAD, working tree status

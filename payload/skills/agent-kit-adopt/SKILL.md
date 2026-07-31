@@ -19,6 +19,7 @@ description: 진행 중인 Git 프로젝트를 공통 로컬 하네스 상태로
 4. 사용 중인 Agent 도구를 인터뷰로 확인해 CONTEXT의 `선언된 Agent 도구` 목록을 갱신한다.
    Claude Code/Codex 외 도구는 그 도구용 지침 파일 필요 여부를 함께 확인한다.
 5. `.agent-project-kit/CONTEXT.md`에는 반복 사용할 안정적인 프로젝트 사실과 검증 앵커만 남긴다.
+   갱신 전 `CONTEXT.md.lock` 규약을 따른다(lock이 있으면 대기, 갱신 시 생성 후 삭제).
 6. `.agent-project-kit/HANDOFF.md`에는 현재 목표, 완료 증거, 실패, dirty paths, 다음 한 단계를 남긴다.
 7. `git status --short`와 필요하면 installer `--doctor` 결과로 격리를 확인한다.
    승인 하에 개편한 `AGENTS.md`/`CLAUDE.md`는 tracked 변경으로 보이는 것이 정상이다.

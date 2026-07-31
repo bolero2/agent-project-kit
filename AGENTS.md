@@ -93,9 +93,15 @@ AGENTS.md · CLAUDE.md        # 이 킷 저장소의 canonical 지침과 Claude 
   `AGENTS.md`(canonical) + `CLAUDE.md`(포인터) 생성·병합은 첫 에이전트 세션의 셋업 스킬이
   사용자 승인 하에 수행한다. installer의 "tracked tree 무수정" 불변식은 그대로 유지된다.
 - **manifest schema 이력 동결**: 배포 payload가 바뀌면 `SCHEMA_VERSION`을 올리고 과거
-  schema의 allowlist를 코드에 동결한다(`SCHEMA_SKILLS`/`SCHEMA_TEMPLATES`). 구버전 설치본은
-  기록된 schema로 검증한 뒤 재설치에서 managed exclude block만 교체하는 방식으로 업그레이드
-  하고, 제거도 구버전 원장 그대로 지원한다.
+  schema의 allowlist를 코드에 동결한다(`SCHEMA_SKILLS`/`SCHEMA_TEMPLATES`/`SCHEMA_AGENTS`).
+  구버전 설치본은 기록된 schema로 검증한 뒤 재설치에서 managed exclude block만 교체하는
+  방식으로 업그레이드하고, 제거도 구버전 원장 그대로 지원한다.
+- **커스텀 Agent도 단일 소스**: `payload/agents/<name>/AGENT.md` 한 벌을 Claude Code에는
+  그대로(`.claude/agents/*.md`), Codex에는 설치 시 TOML로 렌더링(`.codex/agents/*.toml`,
+  `developer_instructions`에 동일 본문)해 배포한다. 모델은 어댑터에서 도구별 지정(Claude
+  `opus`, Codex `gpt-5.6-sol`/high)하고 본문은 "상위 모델 재가동 요청"으로 중립화한다.
+  공통 계약은 local-only `AGENT-RULES.md`에 한 벌만 둔다. Agent는 트리거 문구로만 가동하며
+  세션 자동 가동은 실측 검증 후 승격한다.
 - 자세한 출처·신뢰도 판정은 `docs/research/harness-engineering.md`에 기록한다.
 
 ## 4. 실행 방법
@@ -163,8 +169,12 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 - [x] handoff 왕복 smoke test — 2026-07-22 test-proj에서 Codex 블라인드 질문으로 통과,
   스킬 팬아웃 parity(diff 0)도 실측. 결함 1건(템플릿 commit 경계 모호) 발견·수정.
   기록: `docs/test/2026-07-22.md`
+- [x] 커스텀 Agent 2종(review-killer, developer) + AGENT-RULES 공통 계약 + schema v3
+  (md→TOML 렌더링, v1/v2 업그레이드 경로, 테스트 82개 통과)
 - [ ] 남은 대화형 smoke test: init 인터뷰 절차 관찰, adopt 병합 diff·승인 흐름,
   skill-sync의 Codex 실행 검증, 수정된 템플릿 기반 신규 init 재검증
+- [ ] Agent smoke test: review-killer를 실제 PR에 가동(폴링·처리·수렴 종료), developer를
+  실제 Jira 보드에 가동(잠금·승인 게이트·티켓 이동), Codex에서 `.codex/agents` 인식 확인
 - 릴리스 단계에서 repository-local `bolero2` author로 `master`에 commit/push하고 CI를 확인한다.
 
 ## 9. 환경

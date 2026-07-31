@@ -18,7 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 BOOTSTRAP = ROOT / "bootstrap.sh"
 
 SKILL_NAMES = ("init", "adopt", "handoff", "wrap-up", "skill-sync")
+AGENT_NAMES = ("developer", "review-killer")
 OWNED_PATHS = (
+    ".agent-project-kit/AGENT-RULES.md",
     ".agent-project-kit/CONTEXT.md",
     ".agent-project-kit/HANDOFF.md",
     ".agent-project-kit/hooks/guard.py",
@@ -30,6 +32,8 @@ OWNED_PATHS = (
     ".codex/hooks.json",
     *(f".agents/skills/agent-kit-{name}/SKILL.md" for name in SKILL_NAMES),
     *(f".claude/skills/agent-kit-{name}/SKILL.md" for name in SKILL_NAMES),
+    *(f".claude/agents/{name}.md" for name in AGENT_NAMES),
+    *(f".codex/agents/{name}.toml" for name in AGENT_NAMES),
 )
 MUTABLE_PATHS = (
     ".agent-project-kit/CONTEXT.md",
@@ -1822,20 +1826,26 @@ class SchemaHistoryTests(unittest.TestCase):
 
 
 class SchemaMigrationTests(RepositoryFixture):
-    def install_legacy_v1(self) -> None:
-        legacy_kit = self.base / "legacy-kit"
+    def install_legacy(self, version: int) -> None:
+        legacy_kit = self.base / f"legacy-kit-v{version}"
         shutil.copytree(
             ROOT / "payload",
             legacy_kit / "payload",
             ignore=shutil.ignore_patterns("__pycache__", ".DS_Store"),
         )
-        shutil.rmtree(legacy_kit / "payload/templates")
-        shutil.rmtree(legacy_kit / "payload/skills/agent-kit-skill-sync")
+        shutil.rmtree(legacy_kit / "payload/agents")
+        (legacy_kit / "payload/runtime/AGENT-RULES.md").unlink()
+        if version == 1:
+            shutil.rmtree(legacy_kit / "payload/templates")
+            shutil.rmtree(legacy_kit / "payload/skills/agent-kit-skill-sync")
         root, common = kit_core.find_repository(str(self.repo))
-        with mock.patch.object(kit_core, "SCHEMA_VERSION", 1):
+        with mock.patch.object(kit_core, "SCHEMA_VERSION", version):
             self.assertEqual(kit_core.install(legacy_kit, root, common, "install"), 0)
         manifest = json.loads(manifest_path(self.repo).read_text(encoding="utf-8"))
-        self.assertEqual(manifest["schema_version"], 1)
+        self.assertEqual(manifest["schema_version"], version)
+
+    def install_legacy_v1(self) -> None:
+        self.install_legacy(1)
 
     def test_v1_install_upgrades_in_place_and_uninstalls_cleanly(self) -> None:
         exclude = git_common_dir(self.repo) / "info/exclude"
@@ -1876,6 +1886,78 @@ class SchemaMigrationTests(RepositoryFixture):
             self.assertFalse((self.repo / rel).exists(), rel)
         self.assertFalse(manifest_path(self.repo).exists())
 
+    def test_v2_install_upgrades_to_current_schema_with_agents(self) -> None:
+        before = status(self.repo)
+        self.install_legacy(2)
+        self.assertFalse((self.repo / ".claude/agents/review-killer.md").exists())
+
+        assert_ok(self, self.bootstrap())
+
+        manifest = json.loads(manifest_path(self.repo).read_text(encoding="utf-8"))
+        self.assertEqual(manifest["schema_version"], kit_core.SCHEMA_VERSION)
+        for rel in OWNED_PATHS:
+            self.assertTrue((self.repo / rel).is_file(), rel)
+        exclude = git_common_dir(self.repo) / "info/exclude"
+        data = exclude.read_bytes()
+        self.assertEqual(data.count(kit_core.BLOCK_START.encode("utf-8")), 1)
+        self.assertIn(b"/.codex/agents/review-killer.toml", data)
+        self.assertEqual(status(self.repo), before)
+        assert_ok(self, self.bootstrap("--doctor"))
+
+
+class AgentPayloadTests(RepositoryFixture):
+    def read_agent_body(self, name: str) -> str:
+        raw = (ROOT / f"payload/agents/{name}/AGENT.md").read_bytes()
+        _, body = kit_core.parse_agent_frontmatter(raw)
+        return body
+
+    def test_agent_payloads_have_required_frontmatter_and_rules_reference(self) -> None:
+        for name in AGENT_NAMES:
+            raw = (ROOT / f"payload/agents/{name}/AGENT.md").read_bytes()
+            fields, body = kit_core.parse_agent_frontmatter(raw)
+            self.assertEqual(fields["name"], name)
+            self.assertTrue(fields["description"])
+            self.assertEqual(fields["model"], "opus")
+            self.assertIn("AGENT-RULES.md", body)
+
+    def test_installed_codex_toml_round_trips_shared_agent_body(self) -> None:
+        try:
+            import tomllib
+        except ModuleNotFoundError:
+            self.skipTest("tomllib은 Python 3.11+에서만 제공")
+        assert_ok(self, self.bootstrap())
+        for name in AGENT_NAMES:
+            toml_path = self.repo / f".codex/agents/{name}.toml"
+            parsed = tomllib.loads(toml_path.read_text(encoding="utf-8"))
+            self.assertEqual(parsed["name"], name)
+            self.assertEqual(parsed["model"], kit_core.CODEX_AGENT_MODEL)
+            self.assertEqual(
+                parsed["model_reasoning_effort"], kit_core.CODEX_AGENT_REASONING
+            )
+            self.assertEqual(parsed["sandbox_mode"], "workspace-write")
+            self.assertEqual(
+                parsed["developer_instructions"], self.read_agent_body(name)
+            )
+            claude_md = (self.repo / f".claude/agents/{name}.md").read_bytes()
+            self.assertEqual(
+                kit_core.parse_agent_frontmatter(claude_md)[1],
+                self.read_agent_body(name),
+            )
+
+    def test_agent_rules_payload_covers_mandated_rules(self) -> None:
+        rules = (ROOT / "payload/runtime/AGENT-RULES.md").read_text(encoding="utf-8")
+        for token in (
+            "트리거",
+            "질문",
+            "범위",
+            "force-push",
+            "머지 가능합니다",
+            "Jira 티켓 번호",
+            ".lock",
+            "상위 모델로 재가동",
+        ):
+            self.assertIn(token, rules)
+
 
 class SharedDocumentCommitTests(RepositoryFixture):
     def write_shared_docs_and_user_skill(self) -> Path:
@@ -1909,10 +1991,14 @@ class SharedDocumentCommitTests(RepositoryFixture):
     def test_uninstall_preserves_user_shared_docs_and_skills(self) -> None:
         assert_ok(self, self.bootstrap())
         user_skill = self.write_shared_docs_and_user_skill()
+        user_agent = self.repo / ".claude/agents/my-own-agent.md"
+        user_agent.parent.mkdir(parents=True, exist_ok=True)
+        user_agent.write_text("---\nname: my-own-agent\n---\n사용자 소유 agent\n")
         assert_ok(self, self.bootstrap("--uninstall"))
         self.assertTrue((self.repo / "AGENTS.md").is_file())
         self.assertTrue((self.repo / "CLAUDE.md").is_file())
         self.assertTrue(user_skill.is_file())
+        self.assertTrue(user_agent.is_file())
 
 
 if __name__ == "__main__":

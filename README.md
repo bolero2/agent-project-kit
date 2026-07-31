@@ -158,6 +158,9 @@ flowchart LR
 | `.agent-project-kit/HANDOFF.md` | Claude/Codex가 공유하는 활성 작업 상태 |
 | `.agent-project-kit/hooks/guard.py` | 두 도구가 호출하는 공통 안전 검사 |
 | `.agent-project-kit/templates/*.template.md` | init/adopt가 쓰는 `AGENTS.md`·`CLAUDE.md` 템플릿 |
+| `.agent-project-kit/AGENT-RULES.md` | 커스텀 Agent 공통 계약 (가동 절차·질문 원칙·Git/QA 규칙·lock) |
+| `.claude/agents/<name>.md` | Claude Code용 커스텀 Agent 정의 (developer, review-killer) |
+| `.codex/agents/<name>.toml` | Codex용 커스텀 Agent 정의 — 같은 AGENT.md payload에서 설치 시 생성 |
 | `AGENTS.override.md` | Codex가 공통 컨텍스트와 기존 `AGENTS.md`를 읽게 하는 얇은 어댑터 |
 | `CLAUDE.local.md` | Claude Code가 공통 컨텍스트를 읽게 하는 얇은 어댑터 |
 | `.agents/skills/agent-kit-*/SKILL.md` | Codex용 공식 project skill 경로 |
@@ -212,6 +215,23 @@ worktree scope를 명시한 뒤 linked worktree에 설치할 수 있다. 설치 
 
 두 provider 디렉터리의 스킬은 같은 payload에서 복사되고 테스트로 parity를 확인한다. 기본
 이름을 `agent-kit-*`으로 namespace해 글로벌/bundled skill과 충돌하지 않게 한다.
+
+## 포함된 커스텀 Agent
+
+| Agent | 트리거 예시 | 하는 일 |
+|---|---|---|
+| `review-killer` | "PR #111 리뷰 처리해줘" | PR 리뷰 모니터링(30초×40~60회)·blocker 동시 감시·Blocker/Major 처리(수정/반박/보류)·상태 기반 종료("머지 가능합니다" 통보, merge는 하지 않음) |
+| `developer` | "작업 시작하자", "Agent와 개발 진행할래" | Jira 보드에서 담당 티켓 선정·잠금 코멘트·구현·테스트/QA 후 **승인 게이트를 거쳐** commit/PR·티켓 이동 |
+
+- 본문은 `payload/agents/<name>/AGENT.md` 한 벌이며, Claude Code에는 `.claude/agents/<name>.md`
+  (model: opus), Codex에는 `.codex/agents/<name>.toml`(model: gpt-5.6-sol, reasoning high)로
+  설치 시 렌더링된다. doctor가 payload 대비 drift를 hash로 검사한다.
+- 공통 계약은 `.agent-project-kit/AGENT-RULES.md`에 있다: 트리거 문구로만 가동(자동 가동 없음),
+  모호하면 질문하고 답을 받을 때까지 대기, 명시된 작업 범위만 수정, soln-va-tools 스킬 우선,
+  한 커밋 = 하나의 변경 이유 + 코드 + 테스트, force-push 절대 금지, 자체 merge 금지(통보만),
+  브랜치·커밋·PR 제목에 Jira 번호 금지(링크는 description에만), 상위 모델 필요 시 재가동 요청,
+  공유 문서 갱신 시 `<파일>.lock` 규약.
+- 두 Agent 모두 명시 호출 방식이다. 세션 자동 가동은 실측 검증 후 승격을 검토한다.
 
 “local이 global을 항상 override한다”는 이식 가능한 규칙은 없다. Claude Code는 같은 이름에서
 enterprise → personal → project 순이며 이 세 범위의 스킬은 bundled skill을 대체한다. Codex는

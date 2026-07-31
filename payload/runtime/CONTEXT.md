@@ -26,6 +26,15 @@
 - 규칙 추가·변경은 `AGENTS.md`에만 반영한다. 두 파일은 공유 가능한 정보성 문서로 commit/push가 허용된다.
 - 두 파일이 없으면 `agent-kit-init`(신규) 또는 `agent-kit-adopt`(기존 병합) 스킬의 인터뷰·승인 절차로 만든다. 템플릿: `.agent-project-kit/templates/`.
 
+## 커스텀 Agent
+
+- 설치된 Agent: `review-killer`(PR 리뷰 자동 처리), `developer`(Jira 티켓 처리). 공통 계약은
+  `.agent-project-kit/AGENT-RULES.md`에 있고 Agent는 가동 직후 이를 정독한다.
+- Agent는 사용자의 트리거 문구로만 가동한다 (예: "PR #111 리뷰 처리해줘", "작업 시작하자").
+  세션 시작만으로 자동 가동하지 않는다.
+- 공유 상태 문서 수정 시 `<파일명>.lock` 규약을 따른다: lock이 있으면 대기, 수정 시 lock 생성
+  후 즉시 삭제.
+
 ## Agent 도구와 스킬
 
 - 선언된 Agent 도구 목록은 아래 프로젝트 로컬 메모에 유지한다. 기본값은 Claude Code, Codex이며 그 외 도구는 사용자에게 물어본 뒤 추가하고, 그 도구용 지침 파일을 함께 만든다.
@@ -41,5 +50,8 @@
 - 중요한 경로: TBD
 - 보안/데이터 경계: TBD
 - 반복해서 발생한 지뢰: TBD
+- QA 방법 (Agent용): TBD
+- 리뷰봇 식별자 (review-killer용): TBD
+- Jira 보드/담당자 (developer용): TBD
 
 프로젝트를 처음 탐색했다면 `agent-kit-init`, 진행 중 저장소를 편입했다면 `agent-kit-adopt` 스킬로 이 절만 간결하게 갱신한다.
