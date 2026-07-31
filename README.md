@@ -1,7 +1,20 @@
 # agent-project-kit
 
+![agent-project-kit](project.png)
+
 Claude Code와 Codex가 같은 프로젝트에서 교대 작업할 수 있게 만드는 **프로젝트 로컬 하네스**다.
 신규 프로젝트의 초기 setup과 진행 중인 프로젝트의 무손상 편입을 지원한다.
+
+| 하고 싶은 것 | 방법 |
+|---|---|
+| 신규 프로젝트에 하네스 설치 | `./bootstrap.sh <경로>` → 에이전트에서 `agent-kit-init` |
+| 진행 중 프로젝트에 편입 | `./bootstrap.sh --adopt <경로>` → 에이전트에서 `agent-kit-adopt` |
+| `AGENTS.md`/`CLAUDE.md` 생성·병합 | init/adopt 스킬이 인터뷰·승인 하에 수행 |
+| 도구 전환·세션 인수인계 | `agent-kit-handoff` → 다음 도구가 HANDOFF 자동 복원 |
+| 사용자 스킬을 두 도구에 배포 | `agent-kit-skill-sync` |
+| PR 리뷰 자동 처리 | `review-killer` Agent — "PR #N 리뷰 처리해줘" |
+| Jira 티켓 자동 개발 | `developer` Agent — "작업 시작하자" |
+| 상태 진단 / 제거 | `--doctor` / `--uninstall` |
 
 설치된 규칙·스킬·handoff·훅은 대상 프로젝트에서만 작동하며, 정상적인
 `git add -A → commit → push` 흐름의 commit tree에는 들어가지 않는다. installer는 대상의
@@ -16,6 +29,8 @@ Git의 추적 밖 local/worktree config에는 guard 활성화를 위한 명시�
 > 자세한 순서: [GETTING-STARTED.md](GETTING-STARTED.md)
 >
 > 설계와 보안 경계: [docs/architecture.md](docs/architecture.md)
+>
+> 수동 수용 테스트: [docs/acceptance-test.md](docs/acceptance-test.md)
 >
 > 조사와 출처 판정: [docs/research/harness-engineering.md](docs/research/harness-engineering.md)
 
@@ -97,6 +112,26 @@ agent-kit-adopt 스킬로 현재 규칙, Git 상태, 실행·검증 방법을 �
 
 편입은 기존 dirty/staged/untracked 사용자 상태를 보존한다. owned adapter 경로에 기존 파일이나
 symlink가 있으면 덮어쓰지 않고 설치 전에 실패한다.
+
+## 사용 설명서 — 상황별 요청 문구
+
+설치 후에는 명령어가 아니라 에이전트에게 말하는 방식으로 하네스를 쓴다. 대표 문구:
+
+| 상황 | 에이전트에게 이렇게 요청 |
+|---|---|
+| 신규 프로젝트 첫 세션 | "agent-kit-init 스킬로 프로젝트 인터뷰 진행해서 AGENTS.md와 포인터 CLAUDE.md 만들어 줘" |
+| 기존 프로젝트 편입 | "agent-kit-adopt 스킬로 편입하고, 기존 규칙은 AGENTS.md 기준 병합 개편안을 diff로 제시해 줘" |
+| 도구 바꾸기 전 | "agent-kit-handoff 스킬로 지금 상태 정리해 줘" |
+| 세션/마일스톤 마무리 | "agent-kit-wrap-up 스킬로 마무리해 줘" |
+| 스킬 만들기·수정·삭제 | "~하는 스킬 만들어 줘" (skill-sync 절차로 두 도구에 동일 반영) |
+| PR 리뷰 자동 처리 | "review-killer agent로 PR #111 리뷰 처리해 줘" |
+| 타임아웃 후 재개 | "리뷰 자동 처리 계속 진행해 줘" |
+| Jira 티켓 개발 | "developer agent로 작업 시작하자" (보드/담당자 미지정 시 CONTEXT 기억값 사용) |
+| 이어받은 세션 시작 | "HANDOFF 확인하고 이어서 해 줘" (Claude Code는 자동 로드, 명시하면 더 확실) |
+
+Agent는 트리거 문구로만 가동되고, 모호하면 반드시 질문하며 답을 받을 때까지 대기한다.
+developer Agent의 commit/PR은 초안 승인 게이트를 거친다. 상세 계약은 설치된
+`.agent-project-kit/AGENT-RULES.md` 참조.
 
 ## Claude Code ↔ Codex 전환
 

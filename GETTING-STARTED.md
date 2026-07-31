@@ -125,6 +125,38 @@ agent-kit-adopt 스킬을 사용해 기존 AGENTS.md/CLAUDE.md와 저장소 구�
 agent-kit-wrap-up 스킬로 완료 이력을 압축하고, 검증 결과와 남은 작업을 최신화해 줘.
 ```
 
+## 2-B. 커스텀 Agent 사용
+
+킷은 두 개의 커스텀 Agent를 설치한다(Claude Code `.claude/agents/`, Codex `.codex/agents/`).
+둘 다 **트리거 문구로만 가동**되고, 가동 직후 `AGENT-RULES.md`·필수 문서를 정독하며, 모호한
+것은 반드시 질문하고 답을 받을 때까지 대기한다.
+
+### review-killer — PR 리뷰 자동 처리
+
+```text
+review-killer agent로 PR #111 리뷰 처리해 줘.
+```
+
+- 가동 전 올라온 리뷰부터 처리하고, conflict가 있으면 merge 방식으로 먼저 해소한다.
+- 30초×40~60회 폴링하며 리뷰와 blocker(conflict/CI)를 동시 감시한다. 처리 내역은 PR 코멘트에
+  쌓고 사용자에게는 종료 시 1회만 보고한다.
+- 수렴/approve 시 "머지 가능합니다"로 끝난다. **merge는 직접 하지 않는다.**
+- 타임아웃(약 30분 리뷰 없음) 후에는 "리뷰 자동 처리 계속 진행해 줘"로 재개한다.
+- 첫 가동 시 리뷰봇 식별자와 QA 방법을 물어보고 CONTEXT에 기억한다.
+
+### developer — Jira 티켓 처리
+
+```text
+developer agent로 작업 시작하자.
+```
+
+- 보드/담당자를 명시하지 않으면 CONTEXT에 기억된 값을 쓰고, 없으면 물어본다.
+- 착수한 티켓에 잠금 코멘트를 남기고, 완료 시 삭제 후 티켓을 이동한다(목적지 모르면 질문).
+- 브랜치·커밋·PR 제목에 Jira 번호를 넣지 않는다(PR description 링크만).
+- push/PR 전에 테스트와 QA(docker rebuild + Playwright, Python이면 pytest 필수)를 수행한다.
+- **commit/PR 생성은 반드시 초안을 보여주고 승인을 기다린다.** 응답이 늦어도 임의로 진행하지
+  않는다.
+
 ## 3. Claude Code에서 Codex로 넘기기
 
 Claude Code 세션이 끝나기 전에:
