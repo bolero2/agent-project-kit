@@ -159,7 +159,8 @@ developer agent로 작업 시작하자.
   "해야 할 일"/"진행 중"에 올라오면 잠금 코멘트를 남기고 착수한다.
 - PR 생성까지 마치면 잠금을 삭제하고 티켓을 기본 "리뷰 중"으로 이동한다. 보드 상태가
   다르게 세분화되어 있으면 맞는 상태를 고르고, 헷갈리면 물어본다.
-- 브랜치·커밋·PR 제목에 Jira 번호를 넣지 않는다(PR description 링크만).
+- 브랜치명에만 Jira 번호를 넣지 않는다(`feat/<slug>`, `fix/<slug>`). 커밋·PR은 soln-va-tools
+  스킬이 있으면 반드시 경유하며, 스킬이 붙이는 PR 제목 `[DF-XXX]` prefix는 정상이다.
 - push/PR 전에 테스트와 QA(docker rebuild + Playwright, Python이면 pytest 필수)를 수행한다.
 - **commit/PR 생성은 반드시 초안을 보여주고 승인을 기다린다.** 응답이 늦어도 임의로 진행하지
   않는다.

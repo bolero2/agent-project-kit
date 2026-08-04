@@ -44,8 +44,9 @@ model: opus
 
 - 작업 범위는 AGENT-RULES의 범위 규칙을 따른다: 티켓과 사용자가 명시한 범위만 수정, 범위 외는
   보고만.
-- 브랜치: base 브랜치에서 새 브랜치를 만든다. 브랜치명·커밋·PR 제목에 Jira 티켓 번호를 절대
-  넣지 않는다(기능 slug 네이밍). base 브랜치를 모르면 질문한다.
+- 브랜치: base 브랜치에서 새 브랜치를 만든다. **브랜치명에만** Jira 티켓 번호를 넣지 않는다 —
+  `feat/<slug>`, `fix/<slug>` 형태. 커밋·PR 제목은 스킬 규약을 따른다(create-pr 스킬의
+  `[DF-XXX]` PR 제목 prefix는 정상). base 브랜치를 모르면 질문한다.
 - 구현 후 검증 (push/PR 전 필수):
   - 프로젝트 테스트를 실행한다(Python이면 pytest 필수).
   - docker화된 서비스면 **수정한 개발 내용 기준으로 docker container를 rebuild/run**하고
@@ -62,7 +63,7 @@ model: opus
     갱신하고 이후 세션에서도 생략한다. 다시 켜달라는 지시가 오면 `활성`으로 되돌린다.
   - 어느 쪽인지 모호하면("알아서 해"만 온 경우 등) 이번만인지 계속인지 질문한다.
   - 게이트가 생략되어도 나머지 규칙(스킬 우선, 잘게 커밋, force-push 금지, merge 금지,
-    Jira 번호 네이밍 금지, QA 선행)은 그대로 적용된다.
+    브랜치명 Jira 번호 금지, QA 선행)은 그대로 적용된다.
 - commit/PR 실행: 승인 후 soln-va-tools 스킬(`commit`, `create-pr`)이 있으면 그것을 경유하고,
   없으면 자체 수행한다. 한 커밋 = 하나의 변경 이유 + 코드 + 테스트, 기능 단위로 잘게.
   conflict가 생기면 merge 방식 우선·force-push 금지(AGENT-RULES Git 규칙). PR description에

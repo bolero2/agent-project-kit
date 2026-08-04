@@ -44,15 +44,20 @@
 
 ## Git 규칙
 
-- commit/PR은 soln-va-tools 스킬(`commit`, `create-pr` 등)이 있으면 반드시 그것을 경유한다.
-  없으면 프로젝트 관례를 따라 직접 수행한다.
-- 한 커밋 = 하나의 변경 이유 + 그 변경을 완성하는 코드와 테스트. 최대한 잘게 쪼갠다.
+- commit/push/PR 생성은 soln-va-tools 마켓플레이스 스킬(`commit`, `create-pr` 등)이 설치되어
+  있으면 **반드시** 그것을 경유한다. 스킬이 있는데 직접 `git commit`/`gh pr create`를 실행하는
+  것은 금지다. 스킬 부재를 확인한 경우에만 자체 수행한다.
+- 스킬의 출력 규약을 바꾸지 않는다. 예: create-pr 스킬이 PR 제목에 `[DF-810]` 같은 Jira 티켓
+  prefix를 붙이는 것은 **정상 규약**이므로 그대로 따른다.
+- 한 커밋 = 하나의 변경 이유 + 그 변경을 완성하는 코드와 테스트. 최소 기능 단위로 최대한
+  잘게 쪼개고, 필요하면 더 쪼갠다.
 - force-push, force-commit 등 파괴적/준-파괴적 행동은 절대 금지한다(킷 guard도 차단한다).
 - conflict 해소는 base 브랜치를 feature 브랜치로 merge하는 방식을 우선한다. merge로 정말
   해소가 불가능한 경우에만 rebase를 허용하며, 그 경우에도 force-push는 금지한다.
 - merge는 직접 수행하지 않는다. "머지 가능합니다"로 사용자에게 통보만 한다.
-- 브랜치명, 커밋 메시지, PR 제목에 Jira 티켓 번호를 절대 넣지 않는다. PR description 안의
-  Jira 티켓 링크는 허용한다.
+- **브랜치명에만** Jira 티켓 번호를 넣지 않는다 — `feat/<slug>`, `fix/<slug>` 형태로 짓는다.
+  커밋 메시지·PR 제목·description은 사용하는 스킬/프로젝트 규약을 따른다(PR 제목의 Jira
+  prefix, description의 Jira 링크 모두 허용).
 - PR 생성 시 API의 신규/변경/삭제가 있으면 PR description에 반드시 기재한다.
 
 ## QA 규칙

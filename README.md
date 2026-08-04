@@ -278,7 +278,8 @@ worktree scope를 명시한 뒤 linked worktree에 설치할 수 있다. 설치 
 - 공통 계약은 `.agent-project-kit/AGENT-RULES.md`에 있다: 트리거 문구로만 가동(자동 가동 없음),
   모호하면 질문하고 답을 받을 때까지 대기, 명시된 작업 범위만 수정, soln-va-tools 스킬 우선,
   한 커밋 = 하나의 변경 이유 + 코드 + 테스트, force-push 절대 금지, 자체 merge 금지(통보만),
-  브랜치·커밋·PR 제목에 Jira 번호 금지(링크는 description에만), 상위 모델 필요 시 재가동 요청,
+  브랜치명에만 Jira 번호 금지(`feat/<slug>` 네이밍 — 커밋·PR 제목은 스킬 규약 준수),
+  상위 모델 필요 시 재가동 요청,
   공유 문서 갱신 시 `<파일>.lock` 규약.
 - 두 Agent 모두 명시 호출 방식이다. 세션 자동 가동은 실측 검증 후 승격을 검토한다.
 
