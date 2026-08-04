@@ -39,7 +39,7 @@
 
 - 선언된 Agent 도구 목록은 아래 프로젝트 로컬 메모에 유지한다. 기본값은 Claude Code, Codex이며 그 외 도구는 사용자에게 물어본 뒤 추가하고, 그 도구용 지침 파일을 함께 만든다.
 - 사용자 스킬의 생성·수정·삭제는 `agent-kit-skill-sync` 절차를 따른다: 선언된 모든 도구 경로에 동일 원본으로 반영하고, 동작 검증 후 검증 산출물은 삭제한다.
-- 하네스 파일은 로컬 전용이다. `.agent-project-kit/`, `AGENTS.override.md`, `CLAUDE.local.md`, 설치된 `agent-kit-*` 스킬과 provider hook 설정을 stage/commit하지 않는다.
+- 하네스 파일은 로컬 전용이다. `.agent-project-kit/`, `AGENTS.override.md`, `CLAUDE.local.md`, 설치된 `agent-kit-*` 스킬·킷 Agent 정의와 provider hook 설정을 stage/commit하지 않으며, **수정도 하지 않는다** — 개선은 킷 저장소에 반영해 재설치로만 갱신한다(mutable인 CONTEXT/HANDOFF만 예외).
 - 킷 guard는 실수 방지 보조 장치다. `git add -f`, `--no-verify`, hook 설정 변경 등의 우회를 권한 경계로 간주하지 않는다.
 
 ## 프로젝트 로컬 메모

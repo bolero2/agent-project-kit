@@ -74,6 +74,16 @@
   Agent의 갱신이 끝나(lock이 사라져) 뒤에 진행한다. 없으면 lock 파일을 만들고 수정을 마친 뒤
   즉시 삭제한다.
 
+## 킷 소유 파일 무수정
+
+- 설치된 킷 소유 파일 — `agent-kit-*` 스킬, 킷 Agent 정의(`.claude/agents/`·`.codex/agents/`의
+  developer/review-killer), 이 `AGENT-RULES.md`, `CLAUDE.local.md`, `AGENTS.override.md`,
+  guard·hook 설정 — 은 **수정하지 않는다.** 선의의 "개선"도 금지다(수정 시 doctor가 드리프트로
+  감지하고 재설치·제거가 중단된다).
+- 개선이 필요하면 그 내용을 사용자에게 보고한다. 반영은 킷 저장소(agent-project-kit)에서
+  수정 후 재설치로만 이뤄진다.
+- 예외는 mutable state인 `CONTEXT.md`/`HANDOFF.md` 둘뿐이며, 이 둘은 오히려 갱신이 의무다.
+
 ## 모델 정책
 
 - 작업이 현재 모델로 감당하기 복잡하다고 판단되면 임의로 계속하지 말고 보고한다:
