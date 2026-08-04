@@ -53,5 +53,8 @@
 - QA 방법 (Agent용): TBD
 - 리뷰봇 식별자 (review-killer용): TBD
 - Jira 보드/담당자 (developer용): TBD
+- commit/PR 승인 게이트 (developer용): 활성
+- 킷 저장소 경로: TBD
+- 킷 업데이트 마지막 확인: TBD
 
 프로젝트를 처음 탐색했다면 `agent-kit-init`, 진행 중 저장소를 편입했다면 `agent-kit-adopt` 스킬로 이 절만 간결하게 갱신한다.

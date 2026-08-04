@@ -17,7 +17,7 @@ from scripts import agent_project_kit as kit_core
 ROOT = Path(__file__).resolve().parents[1]
 BOOTSTRAP = ROOT / "bootstrap.sh"
 
-SKILL_NAMES = ("init", "adopt", "handoff", "wrap-up", "skill-sync")
+SKILL_NAMES = ("init", "adopt", "handoff", "wrap-up", "skill-sync", "update")
 AGENT_NAMES = ("developer", "review-killer")
 OWNED_PATHS = (
     ".agent-project-kit/AGENT-RULES.md",
@@ -1833,8 +1833,10 @@ class SchemaMigrationTests(RepositoryFixture):
             legacy_kit / "payload",
             ignore=shutil.ignore_patterns("__pycache__", ".DS_Store"),
         )
-        shutil.rmtree(legacy_kit / "payload/agents")
-        (legacy_kit / "payload/runtime/AGENT-RULES.md").unlink()
+        shutil.rmtree(legacy_kit / "payload/skills/agent-kit-update")
+        if version < 3:
+            shutil.rmtree(legacy_kit / "payload/agents")
+            (legacy_kit / "payload/runtime/AGENT-RULES.md").unlink()
         if version == 1:
             shutil.rmtree(legacy_kit / "payload/templates")
             shutil.rmtree(legacy_kit / "payload/skills/agent-kit-skill-sync")
@@ -1885,6 +1887,27 @@ class SchemaMigrationTests(RepositoryFixture):
         for rel in kit_core.owned_paths(1):
             self.assertFalse((self.repo / rel).exists(), rel)
         self.assertFalse(manifest_path(self.repo).exists())
+
+    def test_v3_install_upgrades_to_current_schema_with_update_skill(self) -> None:
+        before = status(self.repo)
+        self.install_legacy(3)
+        self.assertFalse(
+            (self.repo / ".claude/skills/agent-kit-update/SKILL.md").exists()
+        )
+        self.assertTrue((self.repo / ".claude/agents/review-killer.md").is_file())
+
+        assert_ok(self, self.bootstrap())
+
+        manifest = json.loads(manifest_path(self.repo).read_text(encoding="utf-8"))
+        self.assertEqual(manifest["schema_version"], kit_core.SCHEMA_VERSION)
+        for rel in OWNED_PATHS:
+            self.assertTrue((self.repo / rel).is_file(), rel)
+        exclude = git_common_dir(self.repo) / "info/exclude"
+        data = exclude.read_bytes()
+        self.assertEqual(data.count(kit_core.BLOCK_START.encode("utf-8")), 1)
+        self.assertIn(b"/.claude/skills/agent-kit-update/", data)
+        self.assertEqual(status(self.repo), before)
+        assert_ok(self, self.bootstrap("--doctor"))
 
     def test_v2_install_upgrades_to_current_schema_with_agents(self) -> None:
         before = status(self.repo)

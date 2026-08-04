@@ -233,7 +233,13 @@ git -C /path/to/agent-project-kit pull --ff-only
 ```
 
 설치 당시 hash와 같은 owned 파일만 안전하게 갱신한다. 사용자가 수정한 파일이 있으면 보존하고
-충돌을 보고한다. 먼저 `--diff`로 확인해도 된다.
+충돌을 보고한다. 먼저 `--diff`로 확인해도 된다. 구버전 schema 설치본은 재설치가 자동으로
+업그레이드한다(managed exclude block만 교체, 사용자 원본 보존).
+
+에이전트 세션 안에서는 `agent-kit-update` 스킬이 같은 절차를 대신한다: 하루 1회 자동으로
+GitHub 원본 버전과 비교하고, 차이가 있으면 승인을 받아 pull + 재설치 + doctor까지 수행한다.
+킷 저장소 경로는 CONTEXT 로컬 메모에 기억된다. 파일을 프로젝트 간 수동 복사(copy & paste)로
+업데이트하지 않는다 — manifest 없는 복사본은 guard·doctor·uninstall 판정을 깨뜨린다.
 
 ## 6. 제거
 

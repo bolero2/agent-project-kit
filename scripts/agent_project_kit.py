@@ -24,7 +24,7 @@ from typing import Callable, Iterable
 
 
 KIT_NAME = "agent-project-kit"
-KIT_VERSION = "1.2.0"
+KIT_VERSION = "1.3.0"
 BLOCK_START = "# >>> agent-project-kit managed (local-only; do not edit)"
 BLOCK_END = "# <<< agent-project-kit managed"
 HOOK_CONFIG_START = "# >>> agent-project-kit core.hooksPath (managed; do not edit)"
@@ -62,21 +62,24 @@ HOOK_NAMES = (
 # Owned-path schema history. Every shipped schema version is frozen here so a
 # manifest written by an older kit can still be validated, upgraded in place,
 # and uninstalled without trusting the manifest's own allowlists.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 SCHEMA_SKILLS: dict[int, tuple[str, ...]] = {
     1: ("init", "adopt", "handoff", "wrap-up"),
     2: ("init", "adopt", "handoff", "wrap-up", "skill-sync"),
     3: ("init", "adopt", "handoff", "wrap-up", "skill-sync"),
+    4: ("init", "adopt", "handoff", "wrap-up", "skill-sync", "update"),
 }
 SCHEMA_TEMPLATES: dict[int, tuple[str, ...]] = {
     1: (),
     2: ("AGENTS.template.md", "CLAUDE.template.md"),
     3: ("AGENTS.template.md", "CLAUDE.template.md"),
+    4: ("AGENTS.template.md", "CLAUDE.template.md"),
 }
 SCHEMA_AGENTS: dict[int, tuple[str, ...]] = {
     1: (),
     2: (),
     3: ("developer", "review-killer"),
+    4: ("developer", "review-killer"),
 }
 CODEX_AGENT_MODEL = "gpt-5.6-sol"
 CODEX_AGENT_REASONING = "high"

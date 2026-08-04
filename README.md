@@ -128,6 +128,7 @@ symlink가 있으면 덮어쓰지 않고 설치 전에 실패한다.
 | 타임아웃 후 재개 | "리뷰 자동 처리 계속 진행해 줘" |
 | Jira 티켓 개발 | "developer agent로 작업 시작하자" (보드/담당자 미지정 시 CONTEXT 기억값 사용) |
 | 이어받은 세션 시작 | "HANDOFF 확인하고 이어서 해 줘" (Claude Code는 자동 로드, 명시하면 더 확실) |
+| 킷 업데이트 확인 | "agent-kit-update 스킬로 킷 업데이트 확인해 줘" (하루 1회는 자동 확인) |
 
 Agent는 트리거 문구로만 가동되고, 모호하면 반드시 질문하며 답을 받을 때까지 대기한다.
 developer Agent의 commit/PR은 초안 승인 게이트를 거친다. 상세 계약은 설치된
@@ -182,6 +183,18 @@ flowchart LR
 재설치는 멱등이다. `CONTEXT.md`와 `HANDOFF.md`는 의도적인 mutable state라 내용 변경을
 보존한다. 그 밖의 owned 파일을 사용자가 수정했다면 자동 덮어쓰기나 자동 삭제를 하지 않고
 충돌로 보고한다.
+
+### 킷 업데이트
+
+킷을 여러 프로젝트에서 쓸 때 업데이트 경로는 두 가지다. 파일을 프로젝트 간 수동 복사하지
+않는다 — manifest 없는 복사본은 guard·doctor·uninstall의 소유권 판정을 깨뜨린다.
+
+- **수동**: 킷 저장소에서 `git pull --ff-only` 후 각 프로젝트에 `./bootstrap.sh <경로>` 재실행.
+  재설치는 킷 소유 파일만 교체하고 tracked `AGENTS.md`/`CLAUDE.md`/소스와 local
+  `CONTEXT/HANDOFF`를 보존하며, 구버전 schema 설치본은 자동 업그레이드된다.
+- **자동 확인**: 설치된 `agent-kit-update` 스킬이 세션당 하루 1회 GitHub 원본
+  (`bolero2/agent-project-kit`)의 버전을 확인하고, 차이가 있으면 사용자 승인을 받아
+  pull + 재설치 + doctor까지 수행한다. 승인 없이 적용하지 않는다.
 
 ## 대상 프로젝트에 생기는 것
 
@@ -247,6 +260,7 @@ worktree scope를 명시한 뒤 linked worktree에 설치할 수 있다. 설치 
 | `agent-kit-handoff` | 도구/세션 교대 직전 | Git·검증·실패·다음 행동을 공통 handoff에 기록 |
 | `agent-kit-wrap-up` | 세션/마일스톤 종료 | 완료 이력을 압축하고 검증·미완료 작업·다음 행동을 현행화 |
 | `agent-kit-skill-sync` | 사용자 스킬 생성·수정·삭제 | 선언된 모든 Agent 도구 경로에 동일 원본으로 반영하고 동작 검증 후 산출물 정리 |
+| `agent-kit-update` | 세션당 1회 자동 + 수동 요청 | 설치 버전과 GitHub 원본 버전을 비교하고, 승인 하에 킷 pull + 재설치로 업데이트 |
 
 두 provider 디렉터리의 스킬은 같은 payload에서 복사되고 테스트로 parity를 확인한다. 기본
 이름을 `agent-kit-*`으로 namespace해 글로벌/bundled skill과 충돌하지 않게 한다.

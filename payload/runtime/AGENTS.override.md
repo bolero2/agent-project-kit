@@ -5,6 +5,8 @@
 1. 저장소 루트에 `AGENTS.md`가 있으면 **먼저 직접 읽고 그 프로젝트 지침을 준수한다.**
 2. `.agent-project-kit/CONTEXT.md`를 읽고 현재 프로젝트의 검증·효율 규칙을 따른다.
 3. `.agent-project-kit/HANDOFF.md`에서 직전 도구/세션의 완료·실패·다음 작업을 확인한다.
-4. 도구를 바꾸거나 세션을 끝내기 전 `agent-kit-handoff` 스킬로 HANDOFF를 갱신한다.
+4. 세션에서 처음 실질 작업을 시작하기 전, CONTEXT의 `킷 업데이트 마지막 확인`이 오늘이
+   아니면 `agent-kit-update` 스킬로 하루 1회 업데이트를 확인한다(적용은 사용자 승인 필요).
+5. 도구를 바꾸거나 세션을 끝내기 전 `agent-kit-handoff` 스킬로 HANDOFF를 갱신한다.
 
 이 overlay는 프로젝트의 기존 지침을 대체하기 위한 것이 아니라, Codex가 공통 로컬 상태를 발견하게 하는 얇은 부트스트랩이다.
