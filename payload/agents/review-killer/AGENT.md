@@ -36,6 +36,23 @@ model: opus
 ## 폴링 루프
 
 - 30초 간격 × 40~60회(약 20~30분). 리뷰 코멘트 **개수 증가**를 신호로 쓴다.
+- 대기는 **감지 시 즉시 끝나는 blocking 스크립트를 한 번의 Bash 호출**로 실행한다
+  (AGENT-RULES 대기·폴링 규칙). 회차마다 turn을 끝내거나 "리뷰가 올라오면 알려주세요"라고
+  사용자에게 돌아가는 것은 실패 동작이다. 골격:
+  ```bash
+  before=$(gh pr view $PR --json comments --jq \
+    '[.comments[]|select(.body|contains("<리뷰봇 식별자>"))]|length')
+  for i in $(seq 1 60); do
+    sleep 30
+    state=$(gh pr view $PR --json mergeable,mergeStateStatus \
+      --jq '"\(.mergeable)/\(.mergeStateStatus)"')
+    case "$state" in *CONFLICTING*|*DIRTY*) echo "BLOCKER: $state"; exit 0;; esac
+    now=$(gh pr view $PR --json comments --jq \
+      '[.comments[]|select(.body|contains("<리뷰봇 식별자>"))]|length')
+    if [ -n "$now" ] && [ "$now" -gt "$before" ]; then echo "NEW_REVIEW"; exit 0; fi
+  done
+  echo "TIMEOUT"
+  ```
 - 매 회차 blocker를 동시 감시한다: `mergeable`/`mergeStateStatus`, CI 실패·pending,
   리뷰 워크플로 자체의 실패. blocker 감지 시 폴링을 멈추고 해소 → 재검증 → push → 폴링 재개.
 - 타임아웃(전 회차 소진, 새 리뷰 없음) 시: 상태 마커 코멘트를 남기고 종료를 보고한다.
