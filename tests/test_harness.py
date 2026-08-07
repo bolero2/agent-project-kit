@@ -2023,6 +2023,78 @@ class AgentPayloadTests(RepositoryFixture):
             self.assertIn(token, rules)
 
 
+class LiteModeTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory(prefix="agent-kit-lite-")
+        self.base = Path(self.temp.name)
+        self.folder = self.base / "folder"
+        self.folder.mkdir()
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def bootstrap(self, *flags: str) -> subprocess.CompletedProcess[bytes]:
+        return run(BOOTSTRAP, *flags, self.folder, cwd=ROOT)
+
+    def test_lite_install_doctor_uninstall_roundtrip(self) -> None:
+        assert_ok(self, self.bootstrap("--lite"))
+        for rel in OWNED_PATHS:
+            self.assertTrue((self.folder / rel).is_file(), rel)
+        context = (self.folder / ".agent-project-kit/CONTEXT.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertTrue(context.startswith("> ⚠️ **LITE 설치"))
+        manifest = json.loads(
+            (self.folder / ".agent-project-kit/manifest.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(manifest["install_mode"], "lite")
+        self.assertEqual(manifest["schema_version"], kit_core.SCHEMA_VERSION)
+        assert_ok(self, self.bootstrap("--doctor"))
+        assert_ok(self, self.bootstrap("--uninstall"))
+        for rel in OWNED_PATHS:
+            self.assertFalse((self.folder / rel).exists(), rel)
+        self.assertFalse((self.folder / ".agent-project-kit/manifest.json").exists())
+
+    def test_lite_reinstall_preserves_edited_context_and_uninstall_protects_it(
+        self,
+    ) -> None:
+        assert_ok(self, self.bootstrap("--lite"))
+        context = self.folder / ".agent-project-kit/CONTEXT.md"
+        edited = context.read_text(encoding="utf-8") + "\n- 목표: 로컬 실험 폴더\n"
+        context.write_text(edited, encoding="utf-8")
+        assert_ok(self, self.bootstrap("--lite"))
+        self.assertEqual(context.read_text(encoding="utf-8"), edited)
+        result = self.bootstrap("--uninstall")
+        self.assertEqual(result.returncode, 1, output(result))
+        self.assertIn("mutable state 보존", output(result))
+        self.assertTrue(context.is_file())
+
+    def test_lite_refused_in_git_and_full_install_hints_lite(self) -> None:
+        repo = self.base / "repo"
+        init_repo(repo)
+        lite_in_git = run(BOOTSTRAP, "--lite", repo, cwd=ROOT)
+        self.assertEqual(lite_in_git.returncode, 1, output(lite_in_git))
+        self.assertIn("기본 설치를 사용", output(lite_in_git))
+        full_in_folder = self.bootstrap()
+        self.assertEqual(full_in_folder.returncode, 1, output(full_in_folder))
+        self.assertIn("--lite", output(full_in_folder))
+
+    def test_git_init_after_lite_is_detected_and_migratable(self) -> None:
+        assert_ok(self, self.bootstrap("--lite"))
+        assert git(self.folder, "init", "-q").returncode == 0
+        doctor = self.bootstrap("--doctor")
+        self.assertEqual(doctor.returncode, 1, output(doctor))
+        self.assertIn("git 전환 감지", output(doctor))
+        blocked = self.bootstrap()
+        self.assertEqual(blocked.returncode, 1, output(blocked))
+        self.assertIn("lite 설치 원장", output(blocked))
+        assert_ok(self, self.bootstrap("--uninstall"))
+        assert_ok(self, self.bootstrap())
+        assert_ok(self, self.bootstrap("--doctor"))
+
+
 class RuntimeByproductTests(RepositoryFixture):
     def test_pycache_lock_and_dsstore_do_not_block_reinstall_or_uninstall(self) -> None:
         assert_ok(self, self.bootstrap())

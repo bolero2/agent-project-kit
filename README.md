@@ -72,8 +72,8 @@ Git ignore와 client hook은 권한을 가진 사용자가 `git add -f`, `--no-v
 - Bash와 POSIX file lock을 제공하는 macOS/Linux
 - 사용할 에이전트: Claude Code, Codex 또는 둘 다
 
-대상은 먼저 Git 저장소여야 한다. 글로벌 `~/.claude`, `~/.codex`, `~/.agents`는 수정하지
-않는다.
+대상은 먼저 Git 저장소여야 한다(예외: non-git 폴더용 `--lite` 모드 — 격리 보호 없음, 아래
+CLI 절 참조). 글로벌 `~/.claude`, `~/.codex`, `~/.agents`는 수정하지 않는다.
 
 ## 빠른 시작
 
@@ -169,6 +169,7 @@ flowchart LR
 |---|---:|---|
 | `bootstrap.sh <target>` | 쓰기 | 신규 프로젝트에 로컬 하네스 설치 또는 안전한 재설치 |
 | `bootstrap.sh --adopt <target>` | 쓰기 | 진행 중인 프로젝트에 편입 모드로 설치 |
+| `bootstrap.sh --lite <folder>` | 쓰기 | **non-git 폴더**에 스킬·Agent·상태 파일만 설치 (격리 보호 없음) |
 | `bootstrap.sh --diff <target>` | 읽기 전용 | manifest와 실제 adapter/hash/exclude/hook 차이 확인 |
 | `bootstrap.sh --doctor <target>` | 읽기 전용 | 격리, 추적 상태, 훅, 도구 parity, 손상을 종합 진단 |
 | `bootstrap.sh --uninstall <target>` | 쓰기 | 전체 preflight가 깨끗할 때만 원자적으로 제거·복원 |
@@ -184,6 +185,15 @@ flowchart LR
 재설치는 멱등이다. `CONTEXT.md`와 `HANDOFF.md`는 의도적인 mutable state라 내용 변경을
 보존한다. 그 밖의 owned 파일을 사용자가 수정했다면 자동 덮어쓰기나 자동 삭제를 하지 않고
 충돌로 보고한다.
+
+### lite 모드 — non-git 폴더
+
+문서·데이터 작업처럼 Git이 없는 폴더에는 `--lite`로 스킬 7종·Agent 2종·CONTEXT/HANDOFF만
+설치할 수 있다. manifest는 `.agent-project-kit/manifest.json`에 두며 doctor/재설치/uninstall
+모두 지원한다. 단 **Git 격리 4중 방어가 없다** — CONTEXT 상단에 경고 배너가 들어가고, 이후
+그 폴더를 `git init` 하면 doctor가 "commit 전에 `--uninstall` 후 정식 설치로 전환"을 강제
+안내하며, lite 원장이 있는 상태의 정식 설치는 거부된다(전환 순서: `--uninstall` → 기본 설치).
+Git 저장소에는 `--lite`를 쓸 수 없다.
 
 ### 킷 업데이트
 

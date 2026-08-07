@@ -101,6 +101,18 @@ agent-kit-adopt 스킬을 사용해 기존 AGENTS.md/CLAUDE.md와 저장소 구�
 결과만 반영한다. 개편을 원하지 않으면 기존 구조를 그대로 두고 그 사실만 CONTEXT에 남긴다.
 승인 하에 개편된 `AGENTS.md`/`CLAUDE.md`는 tracked 변경으로 보이는 것이 정상이다.
 
+## 1-C. non-git 폴더 (lite)
+
+Git이 없는 작업 폴더(문서·데이터 등)에는 라이트 설치를 쓴다.
+
+```bash
+/path/to/agent-project-kit/bootstrap.sh --lite /path/to/folder
+```
+
+스킬·Agent·CONTEXT/HANDOFF만 설치되고 **Git 격리 보호(exclude·guard)는 없다.** 나중에 그
+폴더를 `git init` 하면, 어떤 commit보다 먼저 `--uninstall` 후 기본 설치로 전환한다(doctor가
+전환 필요를 감지해 알려준다).
+
 ## 2. 평소 작업
 
 세션 시작 시:

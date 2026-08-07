@@ -4,6 +4,7 @@
 추가하고 아래 목록에 링크한다. 접두사는 [ADD] [UPDATE] [FIX] [REFACTOR] [REMOVE] [FORMAT].
 
 <!-- 최신이 위로 -->
+- [2026-08-07](2026-08-07.md) — --lite 모드: non-git 폴더용 라이트 설치 (kit 1.5.0)
 - [2026-08-05](2026-08-05.md) — Jira 티켓 생성 스킬(agent-kit-jira-ticket, schema v5, kit 1.4.0) + 킷 소유 파일 무수정 규칙 명문화
 - [2026-08-04](2026-08-04.md) — developer 승인 게이트 오버라이드 + agent-kit-update 스킬, schema v4 (kit 1.3.0)
 - [2026-07-31](2026-07-31.md) — 커스텀 Agent 2종(review-killer, developer) + AGENT-RULES 공통 계약 + schema v3 (kit 1.2.0)

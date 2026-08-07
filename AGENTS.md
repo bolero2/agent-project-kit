@@ -76,6 +76,9 @@ AGENTS.md · CLAUDE.md        # 이 킷 저장소의 canonical 지침과 Claude 
 ## 3. 핵심 결정과 근거
 
 - **대상 Git 저장소 필수**: Git 밖에서는 commit 격리를 검증할 수 없으므로 설치하지 않는다.
+  예외는 `--lite` 모드 — non-git 폴더에 스킬·Agent·상태 파일만 설치하며(폴더 로컬 manifest),
+  격리 보호가 없음을 CONTEXT 배너로 경고하고 `git init` 전환을 doctor가 감지해 정식 재설치를
+  강제 안내한다. lite 원장이 있는 폴더의 정식 설치는 `--uninstall` 선행을 요구한다.
 - **프로젝트 `.gitignore` 무수정**: 저장소 로컬·비공유 패턴은 Git의
   `$GIT_COMMON_DIR/info/exclude`에 정확한 root-anchored 경로로 기록한다.
 - **공통 코어 + 얇은 어댑터**: 긴 지침의 복제를 피하고 Claude/Codex 전환 드리프트를 막는다.

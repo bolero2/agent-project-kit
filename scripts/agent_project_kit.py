@@ -24,7 +24,7 @@ from typing import Callable, Iterable
 
 
 KIT_NAME = "agent-project-kit"
-KIT_VERSION = "1.4.1"
+KIT_VERSION = "1.5.0"
 BLOCK_START = "# >>> agent-project-kit managed (local-only; do not edit)"
 BLOCK_END = "# <<< agent-project-kit managed"
 HOOK_CONFIG_START = "# >>> agent-project-kit core.hooksPath (managed; do not edit)"
@@ -909,7 +909,7 @@ def is_runtime_byproduct(rel: str) -> bool:
     return "__pycache__" in parts or name == ".DS_Store" or name.endswith(".lock")
 
 
-def runtime_byproduct_files(root: Path, common_root: Path) -> list[Path]:
+def runtime_byproduct_files(root: Path, common_root: Path | None) -> list[Path]:
     """Kit-caused byproduct files inside kit-reserved locations only."""
     scan_roots: list[Path] = []
     local_root = root / ".agent-project-kit"
@@ -925,7 +925,11 @@ def runtime_byproduct_files(root: Path, common_root: Path) -> list[Path]:
                 and child.is_dir()
                 and not child.is_symlink()
             )
-    if common_root.is_dir() and not common_root.is_symlink():
+    if (
+        common_root is not None
+        and common_root.is_dir()
+        and not common_root.is_symlink()
+    ):
         scan_roots.append(common_root)
     found: list[Path] = []
     for base in scan_roots:
@@ -2275,13 +2279,328 @@ def uninstall(root: Path, common: Path) -> int:
     return 0
 
 
+LITE_CONTEXT_BANNER = """> ⚠️ **LITE 설치 — Git 격리 보호 없음.** 이 폴더는 Git 저장소가 아니어서 exclude와
+> commit/push guard가 없다. 이 폴더를 `git init` 하게 되면 **어떤 commit보다 먼저** 킷을
+> `--uninstall`하고 정식 설치로 전환할 것. 그 전까지 `git add`/`git commit`을 하지 않는다.
+
+"""
+
+
+def lite_manifest_path(root: Path) -> Path:
+    return root / ".agent-project-kit" / "manifest.json"
+
+
+def render_lite_file(key: str, destination: str, data: bytes) -> bytes:
+    rendered = render_worktree_file(key, data)
+    if destination == ".agent-project-kit/CONTEXT.md":
+        return LITE_CONTEXT_BANNER.encode("utf-8") + rendered
+    return rendered
+
+
+def lite_desired_files(payload: dict[str, bytes]) -> dict[str, bytes]:
+    return {
+        destination: render_lite_file(key, destination, payload[source_rel(key)])
+        for key, destination in payload_map().items()
+    }
+
+
+def validate_lite_manifest(value: object, root: Path) -> None:
+    expected_keys = {
+        "schema_version",
+        "kit",
+        "kit_version",
+        "install_mode",
+        "root",
+        "owned_paths",
+        "owned_prefixes",
+        "mutable_paths",
+        "mutable_files",
+        "worktree_files",
+    }
+    if not isinstance(value, dict) or set(value) != expected_keys:
+        raise RuntimeError("지원하지 않거나 손상된 lite manifest 형식입니다.")
+    if value.get("schema_version") not in SCHEMA_SKILLS or value.get("kit") != KIT_NAME:
+        raise RuntimeError("지원하지 않는 lite manifest schema 또는 kit입니다.")
+    version = value["schema_version"]
+    if not isinstance(value.get("kit_version"), str) or not value["kit_version"]:
+        raise RuntimeError("lite manifest kit_version 형식이 잘못되었습니다.")
+    if value.get("install_mode") != "lite":
+        raise RuntimeError("lite manifest install_mode 형식이 잘못되었습니다.")
+    raw_root = value.get("root")
+    if (
+        not isinstance(raw_root, str)
+        or not raw_root
+        or not Path(raw_root).is_absolute()
+    ):
+        raise RuntimeError("lite manifest root 형식이 잘못되었습니다.")
+    if Path(raw_root).resolve() != root:
+        raise RuntimeError(
+            "lite manifest의 root가 현재 폴더와 다릅니다. 폴더를 이동했다면 원위치에서 "
+            "--uninstall 후 재설치하세요."
+        )
+    if value.get("owned_paths") != owned_paths(version):
+        raise RuntimeError(
+            "lite manifest owned_paths allowlist가 기록된 schema와 다릅니다."
+        )
+    if value.get("owned_prefixes") != owned_prefixes():
+        raise RuntimeError(
+            "lite manifest owned_prefixes allowlist가 기록된 schema와 다릅니다."
+        )
+    expected_mutable = sorted(mutable_paths(version))
+    if value.get("mutable_paths") != expected_mutable:
+        raise RuntimeError(
+            "lite manifest mutable_paths allowlist가 기록된 schema와 다릅니다."
+        )
+    validate_hash_map(
+        "mutable_files", value.get("mutable_files"), set(expected_mutable)
+    )
+    validate_hash_map(
+        "worktree_files",
+        value.get("worktree_files"),
+        set(owned_paths(version)) - mutable_paths(version),
+    )
+
+
+def read_lite_manifest_state(
+    root: Path, state: tuple[bool, bytes, int], required: bool = False
+) -> dict | None:
+    if not state[0]:
+        if required:
+            raise RuntimeError(
+                "lite manifest가 없습니다. 먼저 --lite 설치를 실행하세요."
+            )
+        return None
+    try:
+        value = json.loads(state[1].decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(f"lite manifest를 읽을 수 없습니다: {error}") from error
+    validate_lite_manifest(value, root)
+    return value
+
+
+def read_lite_manifest(root: Path, required: bool = False) -> dict | None:
+    return read_lite_manifest_state(
+        root, capture_file_state(lite_manifest_path(root)), required
+    )
+
+
+def lite_install(kit_root: Path, root: Path) -> int:
+    """Skills/agents/state only — no Git isolation. For non-git folders."""
+    if root == kit_root.resolve():
+        raise RuntimeError("킷 저장소 자신에게는 설치할 수 없습니다.")
+    payload = load_payload(kit_root / "payload")
+    desired = lite_desired_files(payload)
+    manifest_file = lite_manifest_path(root)
+    for rel in desired:
+        reject_symlink_escape(root, rel)
+    backups = backup_files([root / rel for rel in desired] + [manifest_file])
+    old = read_lite_manifest_state(root, backups[manifest_file])
+    mutable = mutable_paths()
+    old_worktree = (old or {}).get("worktree_files", {})
+    for rel in desired:
+        state = backups[root / rel]
+        if not state[0]:
+            continue
+        if rel in mutable and old and rel in old.get("mutable_paths", []):
+            if state[2] != expected_worktree_mode(rel):
+                raise RuntimeError(f"mutable state mode가 설치값과 다릅니다: {rel}")
+            continue
+        expected_old = old_worktree.get(rel)
+        if not expected_old:
+            raise RuntimeError(f"기존 로컬 파일과 충돌합니다(덮어쓰지 않음): {rel}")
+        if sha256_bytes(state[1]) != expected_old or state[2] != expected_worktree_mode(
+            rel
+        ):
+            raise RuntimeError(f"설치 후 사용자가 수정한 파일입니다(보존): {rel}")
+    manifest = {
+        "schema_version": SCHEMA_VERSION,
+        "kit": KIT_NAME,
+        "kit_version": KIT_VERSION,
+        "install_mode": "lite",
+        "root": str(root),
+        "owned_paths": owned_paths(),
+        "owned_prefixes": owned_prefixes(),
+        "mutable_paths": sorted(mutable),
+        "mutable_files": {
+            rel: (
+                old.get("mutable_files", {}).get(rel, sha256_bytes(desired[rel]))
+                if old and backups[root / rel][0]
+                else sha256_bytes(desired[rel])
+            )
+            for rel in sorted(mutable)
+        },
+        "worktree_files": {
+            rel: sha256_bytes(data)
+            for rel, data in sorted(desired.items())
+            if rel not in mutable
+        },
+    }
+    written: dict[Path, tuple[bool, bytes, int]] = {}
+    try:
+        for rel, data in desired.items():
+            path = root / rel
+            if rel in mutable and backups[path][0]:
+                if not file_matches_state(path, backups[path]):
+                    raise RuntimeError(
+                        f"설치 중 mutable state가 동시에 변경되었습니다: {path}"
+                    )
+                continue
+            atomic_write_recorded(
+                path, data, expected_worktree_mode(rel), backups[path], written
+            )
+        manifest_data = (
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+        ).encode("utf-8")
+        atomic_write_recorded(
+            manifest_file, manifest_data, 0o600, backups[manifest_file], written
+        )
+    except BaseException as original_error:
+        rollback_errors = restore_files(backups, written)
+        if rollback_errors:
+            raise RuntimeError(
+                "lite 설치 rollback이 완전하지 않습니다. 수동 감사 필요: "
+                + "; ".join(rollback_errors)
+            ) from original_error
+        raise
+    print(f"lite 설치 완료: {root}")
+    print("  스킬/Agent/CONTEXT/HANDOFF만 설치되었습니다.")
+    print("⚠️  Git 격리 보호(exclude·commit guard)가 없습니다. 이 폴더를 git init 하면")
+    print("    어떤 commit보다 먼저 --uninstall 후 정식 설치로 전환하세요.")
+    return 0
+
+
+def lite_inspect(kit_root: Path, root: Path, verbose: bool, inside_git: bool) -> int:
+    manifest = read_lite_manifest(root, required=True)
+    assert manifest is not None
+    errors: list[str] = []
+    if inside_git:
+        errors.append(
+            "git 전환 감지: lite 설치에는 격리 보호가 없습니다. commit 전에 --uninstall 후 "
+            "정식 설치로 전환하세요."
+        )
+        tracked = tracked_owned(root)
+        if tracked:
+            errors.append("킷 파일이 Git에 추적됨: " + ", ".join(tracked))
+    if manifest.get("kit_version") != KIT_VERSION:
+        errors.append(
+            f"설치 버전({manifest.get('kit_version')})과 현재 킷({KIT_VERSION})이 다름"
+        )
+    errors.extend(
+        check_hashes(
+            root, manifest.get("worktree_files", {}), "worktree", expected_worktree_mode
+        )
+    )
+    payload = load_payload(kit_root / "payload")
+    for key, rel in payload_map().items():
+        if rel in mutable_paths():
+            continue
+        path = root / rel
+        if path.is_file() and sha256_file(path) != sha256_bytes(
+            render_lite_file(key, rel, payload[source_rel(key)])
+        ):
+            errors.append(f"현재 킷 payload와 설치본이 다름(재설치 필요): {rel}")
+    for rel in manifest.get("mutable_paths", []):
+        path = root / rel
+        if not path.is_file() or path.is_symlink():
+            errors.append(f"mutable state 누락/비정상: {rel}")
+        elif stat.S_IMODE(path.stat().st_mode) != expected_worktree_mode(rel):
+            errors.append(f"mutable state mode 드리프트: {rel}")
+    try:
+        json.loads((root / ".claude/settings.local.json").read_text(encoding="utf-8"))
+        json.loads((root / ".codex/hooks.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        errors.append(f"provider hook JSON 오류: {error}")
+    for skill in SCHEMA_SKILLS[SCHEMA_VERSION]:
+        left = root / f".agents/skills/agent-kit-{skill}/SKILL.md"
+        right = root / f".claude/skills/agent-kit-{skill}/SKILL.md"
+        if (
+            left.is_file()
+            and right.is_file()
+            and left.read_bytes() != right.read_bytes()
+        ):
+            errors.append(f"provider skill 내용 불일치: agent-kit-{skill}")
+    if verbose:
+        print(f"agent-project-kit doctor (lite): {root}")
+    if errors:
+        for item in errors:
+            print(f"  ERROR: {item}")
+        return 1
+    print("  OK: lite manifest/hash, provider adapters (Git 격리 보호는 없음 — lite)")
+    return 0
+
+
+def lite_uninstall(root: Path, inside_git: bool) -> int:
+    manifest_file = lite_manifest_path(root)
+    manifest = read_lite_manifest(root, required=True)
+    assert manifest is not None
+    warnings: list[str] = []
+    if inside_git:
+        tracked = tracked_owned(root)
+        if tracked:
+            warnings.append(
+                "킷 파일이 Git index/tracking에 포함됨: " + ", ".join(tracked)
+            )
+    removal_rels = list(manifest.get("worktree_files", {})) + list(
+        manifest.get("mutable_paths", [])
+    )
+    for rel in removal_rels:
+        reject_symlink_escape(root, rel)
+    byproducts = runtime_byproduct_files(root, None)
+    backups = backup_files(
+        [root / rel for rel in removal_rels] + byproducts + [manifest_file]
+    )
+    for rel, expected in sorted(manifest.get("worktree_files", {}).items()):
+        state = backups[root / rel]
+        if state[0] and (
+            sha256_bytes(state[1]) != expected
+            or state[2] != expected_worktree_mode(rel)
+        ):
+            warnings.append(f"수정된 소유 파일 보존: {root / rel}")
+    for rel in manifest.get("mutable_paths", []):
+        state = backups[root / rel]
+        if state[0]:
+            baseline = manifest.get("mutable_files", {}).get(rel)
+            if (
+                not baseline
+                or sha256_bytes(state[1]) != baseline
+                or state[2] != expected_worktree_mode(rel)
+            ):
+                warnings.append(f"사용자가 갱신한 mutable state 보존: {root / rel}")
+    if warnings:
+        for item in warnings:
+            print(f"  WARNING: {item}", file=sys.stderr)
+        print("uninstall 중단: 어떤 파일도 제거하지 않았습니다.", file=sys.stderr)
+        return 1
+    post_states: dict[Path, tuple[bool, bytes, int]] = {}
+    try:
+        for rel in sorted(removal_rels, reverse=True):
+            path = root / rel
+            if backups[path][0]:
+                unlink_recorded(path, backups[path], post_states)
+        for path in byproducts:
+            if backups[path][0]:
+                unlink_recorded(path, backups[path], post_states)
+        unlink_recorded(manifest_file, backups[manifest_file], post_states)
+    except BaseException as original_error:
+        rollback_errors = restore_files(backups, post_states)
+        if rollback_errors:
+            raise RuntimeError(
+                "lite uninstall rollback이 완전하지 않습니다. 수동 감사 필요: "
+                + "; ".join(rollback_errors)
+            ) from original_error
+        raise
+    print(f"lite uninstall 완료: {root}")
+    return 0
+
+
 def usage(program: str) -> str:
     return f"""사용법:
   {program} <Git 프로젝트 경로>             신규 로컬 설치
   {program} --adopt <Git 프로젝트 경로>     진행 중 프로젝트 로컬 편입
-  {program} --doctor <Git 프로젝트 경로>    무결성 점검(읽기 전용)
-  {program} --diff <Git 프로젝트 경로>      설치 드리프트 점검(읽기 전용)
-  {program} --uninstall <Git 프로젝트 경로> 로컬 킷 제거/훅 설정 복원
+  {program} --lite <폴더 경로>              non-git 폴더용 라이트 설치(격리 보호 없음)
+  {program} --doctor <경로>                 무결성 점검(읽기 전용)
+  {program} --diff <경로>                   설치 드리프트 점검(읽기 전용)
+  {program} --uninstall <경로>              로컬 킷 제거/훅 설정 복원
 """
 
 
@@ -2290,7 +2609,7 @@ def parse_args(argv: list[str]) -> tuple[str, str]:
         print(usage(Path(sys.argv[0]).name))
         raise SystemExit(0 if argv else 2)
     mode = "install"
-    if argv[0] in {"--adopt", "--doctor", "--diff", "--uninstall"}:
+    if argv[0] in {"--adopt", "--lite", "--doctor", "--diff", "--uninstall"}:
         mode = argv.pop(0)[2:]
     if len(argv) != 1:
         raise RuntimeError(usage(Path(sys.argv[0]).name).rstrip())
@@ -2302,8 +2621,61 @@ def main(argv: list[str] | None = None) -> int:
         args = list(sys.argv[1:] if argv is None else argv)
         mode, requested = parse_args(args)
         ensure_git_version()
-        root, common = find_repository(requested)
         kit_root = Path(__file__).resolve().parent.parent
+        candidate = Path(requested).expanduser()
+        if not candidate.is_dir():
+            raise RuntimeError(f"대상 디렉터리가 없습니다: {requested}")
+        candidate = candidate.resolve()
+        probe = run_git(candidate, "rev-parse", "--is-inside-work-tree", check=False)
+        inside_git = probe.returncode == 0 and probe.stdout.strip() == b"true"
+
+        if mode == "lite":
+            if inside_git:
+                raise RuntimeError(
+                    "Git 저장소에는 --lite가 아니라 기본 설치를 사용하세요 "
+                    "(격리 보호가 포함된 정식 설치)."
+                )
+            state_dir = candidate / ".agent-project-kit"
+            state_dir.mkdir(parents=True, exist_ok=True)
+            with common_directory_lock(state_dir, create=True):
+                return lite_install(kit_root, candidate)
+
+        if not inside_git:
+            if lite_manifest_path(candidate).is_file():
+                state_dir = candidate / ".agent-project-kit"
+                with common_directory_lock(state_dir, create=mode == "uninstall"):
+                    if mode in {"doctor", "diff"}:
+                        return lite_inspect(
+                            kit_root, candidate, mode == "doctor", inside_git=False
+                        )
+                    if mode == "uninstall":
+                        return lite_uninstall(candidate, inside_git=False)
+                raise RuntimeError(
+                    "이 폴더에는 lite 설치가 있습니다. 정식 설치로 전환하려면 git init 후 "
+                    "--uninstall → 기본 설치 순서로 진행하세요."
+                )
+            raise RuntimeError(
+                "agent-project-kit은 Git worktree에서만 설치할 수 있습니다 "
+                "(먼저 git init 하거나, non-git 폴더에는 --lite를 사용하세요)."
+            )
+
+        root, common = find_repository(str(candidate))
+        git_manifest_present = (common / KIT_NAME / "manifest.json").is_file()
+        lite_present = lite_manifest_path(root).is_file()
+        if lite_present:
+            if mode in {"install", "adopt"}:
+                raise RuntimeError(
+                    "이 폴더에는 lite 설치 원장이 있습니다. 먼저 --uninstall로 lite 설치를 "
+                    "제거한 뒤 정식 설치하세요."
+                )
+            if not git_manifest_present:
+                state_dir = root / ".agent-project-kit"
+                with common_directory_lock(state_dir, create=mode == "uninstall"):
+                    if mode in {"doctor", "diff"}:
+                        return lite_inspect(
+                            kit_root, root, mode == "doctor", inside_git=True
+                        )
+                    return lite_uninstall(root, inside_git=True)
         with common_directory_lock(
             common, create=mode in {"install", "adopt", "uninstall"}
         ):
