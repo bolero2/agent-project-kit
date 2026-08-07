@@ -17,10 +17,19 @@ from scripts import agent_project_kit as kit_core
 ROOT = Path(__file__).resolve().parents[1]
 BOOTSTRAP = ROOT / "bootstrap.sh"
 
-SKILL_NAMES = ("init", "adopt", "handoff", "wrap-up", "skill-sync", "update")
+SKILL_NAMES = (
+    "init",
+    "adopt",
+    "handoff",
+    "wrap-up",
+    "skill-sync",
+    "update",
+    "jira-ticket",
+)
 AGENT_NAMES = ("developer", "review-killer")
 OWNED_PATHS = (
     ".agent-project-kit/AGENT-RULES.md",
+    ".agent-project-kit/jira-ticket.config.json",
     ".agent-project-kit/CONTEXT.md",
     ".agent-project-kit/HANDOFF.md",
     ".agent-project-kit/hooks/guard.py",
@@ -38,6 +47,7 @@ OWNED_PATHS = (
 MUTABLE_PATHS = (
     ".agent-project-kit/CONTEXT.md",
     ".agent-project-kit/HANDOFF.md",
+    ".agent-project-kit/jira-ticket.config.json",
 )
 IMMUTABLE_PATHS = tuple(path for path in OWNED_PATHS if path not in MUTABLE_PATHS)
 
@@ -1833,7 +1843,10 @@ class SchemaMigrationTests(RepositoryFixture):
             legacy_kit / "payload",
             ignore=shutil.ignore_patterns("__pycache__", ".DS_Store"),
         )
-        shutil.rmtree(legacy_kit / "payload/skills/agent-kit-update")
+        shutil.rmtree(legacy_kit / "payload/skills/agent-kit-jira-ticket")
+        (legacy_kit / "payload/runtime/jira-ticket.config.json").unlink()
+        if version < 4:
+            shutil.rmtree(legacy_kit / "payload/skills/agent-kit-update")
         if version < 3:
             shutil.rmtree(legacy_kit / "payload/agents")
             (legacy_kit / "payload/runtime/AGENT-RULES.md").unlink()
@@ -1887,6 +1900,34 @@ class SchemaMigrationTests(RepositoryFixture):
         for rel in kit_core.owned_paths(1):
             self.assertFalse((self.repo / rel).exists(), rel)
         self.assertFalse(manifest_path(self.repo).exists())
+
+    def test_v4_install_upgrades_to_current_schema_with_jira_ticket_skill(self) -> None:
+        before = status(self.repo)
+        self.install_legacy(4)
+        self.assertFalse(
+            (self.repo / ".claude/skills/agent-kit-jira-ticket/SKILL.md").exists()
+        )
+        self.assertFalse(
+            (self.repo / ".agent-project-kit/jira-ticket.config.json").exists()
+        )
+
+        assert_ok(self, self.bootstrap())
+
+        manifest = json.loads(manifest_path(self.repo).read_text(encoding="utf-8"))
+        self.assertEqual(manifest["schema_version"], kit_core.SCHEMA_VERSION)
+        self.assertIn(
+            ".agent-project-kit/jira-ticket.config.json", manifest["mutable_paths"]
+        )
+        for rel in OWNED_PATHS:
+            self.assertTrue((self.repo / rel).is_file(), rel)
+        config = json.loads(
+            (self.repo / ".agent-project-kit/jira-ticket.config.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(config["site"], "")
+        self.assertEqual(status(self.repo), before)
+        assert_ok(self, self.bootstrap("--doctor"))
 
     def test_v3_install_upgrades_to_current_schema_with_update_skill(self) -> None:
         before = status(self.repo)

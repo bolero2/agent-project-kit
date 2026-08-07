@@ -24,7 +24,7 @@ from typing import Callable, Iterable
 
 
 KIT_NAME = "agent-project-kit"
-KIT_VERSION = "1.3.0"
+KIT_VERSION = "1.4.0"
 BLOCK_START = "# >>> agent-project-kit managed (local-only; do not edit)"
 BLOCK_END = "# <<< agent-project-kit managed"
 HOOK_CONFIG_START = "# >>> agent-project-kit core.hooksPath (managed; do not edit)"
@@ -62,31 +62,39 @@ HOOK_NAMES = (
 # Owned-path schema history. Every shipped schema version is frozen here so a
 # manifest written by an older kit can still be validated, upgraded in place,
 # and uninstalled without trusting the manifest's own allowlists.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 SCHEMA_SKILLS: dict[int, tuple[str, ...]] = {
     1: ("init", "adopt", "handoff", "wrap-up"),
     2: ("init", "adopt", "handoff", "wrap-up", "skill-sync"),
     3: ("init", "adopt", "handoff", "wrap-up", "skill-sync"),
     4: ("init", "adopt", "handoff", "wrap-up", "skill-sync", "update"),
+    5: ("init", "adopt", "handoff", "wrap-up", "skill-sync", "update", "jira-ticket"),
 }
 SCHEMA_TEMPLATES: dict[int, tuple[str, ...]] = {
     1: (),
     2: ("AGENTS.template.md", "CLAUDE.template.md"),
     3: ("AGENTS.template.md", "CLAUDE.template.md"),
     4: ("AGENTS.template.md", "CLAUDE.template.md"),
+    5: ("AGENTS.template.md", "CLAUDE.template.md"),
 }
 SCHEMA_AGENTS: dict[int, tuple[str, ...]] = {
     1: (),
     2: (),
     3: ("developer", "review-killer"),
     4: ("developer", "review-killer"),
+    5: ("developer", "review-killer"),
+}
+# Mutable per-machine config seeds deployed under .agent-project-kit/. They are
+# owned (preflight-safe) but user-editable and preserved across reinstalls.
+SCHEMA_CONFIGS: dict[int, tuple[str, ...]] = {
+    1: (),
+    2: (),
+    3: (),
+    4: (),
+    5: ("jira-ticket.config.json",),
 }
 CODEX_AGENT_MODEL = "gpt-5.6-sol"
 CODEX_AGENT_REASONING = "high"
-MUTABLE_PATHS = {
-    ".agent-project-kit/CONTEXT.md",
-    ".agent-project-kit/HANDOFF.md",
-}
 LOCK_FILE = "agent-project-kit.lock"
 LOCK_MAGIC = b"agent-project-kit common-dir lock v1\n"
 MIN_GIT_VERSION = (2, 31)
@@ -97,6 +105,16 @@ def resolve_schema_version(version: int | None) -> int:
     if resolved not in SCHEMA_SKILLS:
         raise RuntimeError(f"지원하지 않는 manifest schema version입니다: {resolved}")
     return resolved
+
+
+def mutable_paths(version: int | None = None) -> set[str]:
+    version = resolve_schema_version(version)
+    paths = {
+        ".agent-project-kit/CONTEXT.md",
+        ".agent-project-kit/HANDOFF.md",
+    }
+    paths.update(f".agent-project-kit/{name}" for name in SCHEMA_CONFIGS[version])
+    return paths
 
 
 def payload_map(version: int | None = None) -> dict[str, str]:
@@ -112,6 +130,8 @@ def payload_map(version: int | None = None) -> dict[str, str]:
     }
     for name in SCHEMA_TEMPLATES[version]:
         mapping[f"templates/{name}"] = f".agent-project-kit/templates/{name}"
+    for name in SCHEMA_CONFIGS[version]:
+        mapping[f"runtime/{name}"] = f".agent-project-kit/{name}"
     for skill in SCHEMA_SKILLS[version]:
         source = f"skills/agent-kit-{skill}/SKILL.md"
         mapping[f"{source}::agents"] = f".agents/skills/agent-kit-{skill}/SKILL.md"
@@ -619,8 +639,8 @@ def validate_manifest(value: object, path: Path) -> None:
         raise RuntimeError("manifest git_common_dir가 실제 위치와 다릅니다.")
 
     expected_owned = owned_paths(manifest_version)
-    expected_mutable = sorted(MUTABLE_PATHS)
-    expected_immutable = set(expected_owned) - MUTABLE_PATHS
+    expected_mutable = sorted(mutable_paths(manifest_version))
+    expected_immutable = set(expected_owned) - mutable_paths(manifest_version)
     if value.get("owned_paths") != expected_owned:
         raise RuntimeError("manifest owned_paths allowlist가 기록된 schema와 다릅니다.")
     if value.get("owned_prefixes") != owned_prefixes():
@@ -1195,7 +1215,7 @@ def ensure_installable(
         state = states[path]
         if state[0]:
             expected_old = old_worktree.get(rel)
-            if rel in MUTABLE_PATHS and old and rel in old.get("mutable_paths", []):
+            if rel in mutable_paths() and old and rel in old.get("mutable_paths", []):
                 if state[2] != expected_worktree_mode(rel):
                     raise RuntimeError(f"mutable state mode가 설치값과 다릅니다: {rel}")
                 continue
@@ -1593,7 +1613,7 @@ def install(kit_root: Path, root: Path, common: Path, mode: str) -> int:
         "git_common_dir": str(common),
         "owned_paths": owned_paths(),
         "owned_prefixes": owned_prefixes(),
-        "mutable_paths": sorted(MUTABLE_PATHS),
+        "mutable_paths": sorted(mutable_paths()),
         "mutable_files": {
             rel: (
                 old.get("mutable_files", {}).get(
@@ -1602,12 +1622,12 @@ def install(kit_root: Path, root: Path, common: Path, mode: str) -> int:
                 if old and backups[root / rel][0]
                 else sha256_bytes(desired_worktree[rel])
             )
-            for rel in sorted(MUTABLE_PATHS)
+            for rel in sorted(mutable_paths())
         },
         "worktree_files": {
             rel: sha256_bytes(data)
             for rel, data in sorted(desired_worktree.items())
-            if rel not in MUTABLE_PATHS
+            if rel not in mutable_paths()
         },
         "common_files": {
             rel: sha256_bytes(data) for rel, data in sorted(desired_common.items())
@@ -1635,7 +1655,7 @@ def install(kit_root: Path, root: Path, common: Path, mode: str) -> int:
     try:
         for rel, data in desired_worktree.items():
             path = root / rel
-            if rel in MUTABLE_PATHS and backups[path][0]:
+            if rel in mutable_paths() and backups[path][0]:
                 if not file_matches_state(path, backups[path]):
                     raise RuntimeError(
                         f"설치 중 mutable state가 동시에 변경되었습니다: {path}"
@@ -1919,7 +1939,7 @@ def inspect(kit_root: Path, root: Path, common: Path, verbose: bool) -> int:
     )
     payload = load_payload(kit_root / "payload")
     for key, rel in payload_map().items():
-        if rel in MUTABLE_PATHS:
+        if rel in mutable_paths():
             continue
         path = root / rel
         if path.is_file() and sha256_file(path) != sha256_bytes(
@@ -2004,10 +2024,10 @@ def uninstall(root: Path, common: Path) -> int:
     }
     removal_paths = [exclude, manifest_path]
     removal_paths.extend(
-        root / rel for rel in owned_paths() if rel not in MUTABLE_PATHS
+        root / rel for rel in owned_paths() if rel not in mutable_paths()
     )
     removal_paths.extend(common_root / rel for rel in common_owned_paths())
-    removal_paths.extend(root / rel for rel in sorted(MUTABLE_PATHS))
+    removal_paths.extend(root / rel for rel in sorted(mutable_paths()))
     removal_paths.extend(config_paths.values())
     for rel in owned_paths():
         reject_symlink_escape(root, rel)

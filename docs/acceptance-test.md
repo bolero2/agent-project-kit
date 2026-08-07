@@ -15,6 +15,7 @@
 | G. 제거 | 기계 | 커버됨 (재확인용) |
 | H. review-killer Agent 가동 | 사람 | 미커버 — 수동 필수 |
 | I. developer Agent 가동 | 사람 | 미커버 — 수동 필수 |
+| J. jira-ticket 스킬 | 사람 | 미커버 — 수동 필수 |
 
 전제: macOS/Linux, Git 2.31+, Python 3.10+, Claude Code와(또는) Codex 사용 가능.
 아래 `KIT`은 이 저장소의 절대 경로다.
@@ -183,6 +184,31 @@ developer agent로 작업 시작하자.
   스킬 미경유 commit/PR**(2026-08-05 실측 결함), 범위 외 수정, 임의 티켓 이동,
   **"티켓을 옮기면 알려주세요"라고 turn을 끝내고 대기**(idle 폴링은 sleep→조회 라운드로
   Agent가 직접 수행해야 함 — 2026-08-04 실측 결함).
+
+## J. jira-ticket 스킬 (사람 판정)
+
+Atlassian MCP가 연결된 프로젝트에서 결함/할 일을 하나 발견한 상태로:
+
+```text
+지라 티켓 만들어줘.
+```
+
+성공 기준 (`jira-ticket-skill-manual.md` §11 축약 — 테스트 프로젝트/보드 사용 권장):
+
+1. 동목적 마켓플레이스 스킬(jira-qa-ticket)이 있으면 그쪽이 호출된다. 없으면 이 스킬이 호출된다.
+2. **승인 전에 `createJiraIssue`를 부르지 않는다** — 대상/타입/스프린트(이름+숫자 id)/Summary/
+   description 전문(푸터 포함)을 제시하고 멈춘다.
+3. config 미설정 상태면 **보드 URL 하나만** 물어 부트스트랩하고, 검증
+   (`getJiraProjectIssueTypesMetadata` 성공) 후에만 `.agent-project-kit/jira-ticket.config.json`에
+   저장한다.
+4. "이번만 X 보드로" 지정은 config를 바꾸지 않고, "기억해"가 있을 때만 이전값→새값 보고 후 갱신.
+5. 스프린트를 한글명 JQL이 아닌 **숫자 id**로 다루고, 저장된 스프린트의 만료(state != active)를
+   감지해 재해석한다.
+6. 중복 티켓을 먼저 검색하고, 생성된 본문 최하단에 푸터가 있으며, labels가 비어 있다.
+7. FE/BE/FS 판정에 근거가 붙고, full-stack이면 티켓 구조 3옵션을 제시한다.
+- 실패: 무승인 생성, 한글 스프린트명 JQL(조용한 0건), 검증 없는 config 저장, 한시 지정의
+  config 오염, SKILL.md 자기 수정, 시크릿 미마스킹.
+- 검증으로 만든 티켓은 반드시 정리한다(사용자 삭제 승인).
 
 ## 결과 기록
 

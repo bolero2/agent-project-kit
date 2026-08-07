@@ -177,8 +177,12 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
   soln-va-tools 경유·브랜치 네이밍·승인 게이트 5개 통과. 결함 2건 발견·수정
   (Jira 번호 규칙 과대해석 → 브랜치명 한정, 착수 시 "진행 중" 이동 누락).
   기록: `docs/test/2026-08-05.md`
+- [x] Jira 티켓 생성 스킬(agent-kit-jira-ticket) — `jira-ticket-skill-manual.md` 기반, 승인
+  게이트·config 부트스트랩·스프린트 숫자 id 규칙 반영. config는 `.agent-project-kit/`의
+  mutable seed 한 벌(schema v5, 테스트 84개 통과)
 - [ ] 남은 Agent smoke test: developer 완료 단계(잠금 해제·"리뷰 중" 이동)와 착수 이동
-  재검증, review-killer 실제 PR 가동(폴링·처리·수렴 종료), Codex `.codex/agents` 인식 확인
+  재검증, review-killer 실제 PR 가동(폴링·처리·수렴 종료), Codex `.codex/agents` 인식 확인,
+  jira-ticket 스킬 시나리오 J 실측
 - 릴리스 단계에서 repository-local `bolero2` author로 `master`에 commit/push하고 CI를 확인한다.
 
 ## 9. 환경
