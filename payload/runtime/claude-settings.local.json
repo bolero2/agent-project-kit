@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/.agent-project-kit/hooks/guard.py\" agent-hook"
+            "command": "python3 -B \"${CLAUDE_PROJECT_DIR:-.}/.agent-project-kit/hooks/guard.py\" agent-hook"
           }
         ]
       }
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/.agent-project-kit/hooks/guard.py\" agent-hook"
+            "command": "python3 -B \"${CLAUDE_PROJECT_DIR:-.}/.agent-project-kit/hooks/guard.py\" agent-hook"
           }
         ]
       }

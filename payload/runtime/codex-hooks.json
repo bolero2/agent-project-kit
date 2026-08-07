@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/.agent-project-kit/hooks/guard.py\" agent-hook"
+            "command": "python3 -B \"$(git rev-parse --show-toplevel)/.agent-project-kit/hooks/guard.py\" agent-hook"
           }
         ]
       }
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/.agent-project-kit/hooks/guard.py\" agent-hook"
+            "command": "python3 -B \"$(git rev-parse --show-toplevel)/.agent-project-kit/hooks/guard.py\" agent-hook"
           }
         ]
       }

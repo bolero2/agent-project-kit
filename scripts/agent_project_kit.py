@@ -24,7 +24,7 @@ from typing import Callable, Iterable
 
 
 KIT_NAME = "agent-project-kit"
-KIT_VERSION = "1.4.0"
+KIT_VERSION = "1.4.1"
 BLOCK_START = "# >>> agent-project-kit managed (local-only; do not edit)"
 BLOCK_END = "# <<< agent-project-kit managed"
 HOOK_CONFIG_START = "# >>> agent-project-kit core.hooksPath (managed; do not edit)"
@@ -896,6 +896,49 @@ def tracked_owned(root: Path) -> list[str]:
     ]
 
 
+def is_runtime_byproduct(rel: str) -> bool:
+    """Benign runtime droppings under kit-reserved prefixes.
+
+    These are produced by normal operation (python bytecode cache, Finder
+    metadata, the kit's own crash-leftover ``<file>.lock`` convention). They
+    must not block reinstall/uninstall preflight, and uninstall removes them —
+    otherwise they surface in git status once the managed exclude is restored.
+    """
+    parts = Path(rel).parts
+    name = parts[-1] if parts else ""
+    return "__pycache__" in parts or name == ".DS_Store" or name.endswith(".lock")
+
+
+def runtime_byproduct_files(root: Path, common_root: Path) -> list[Path]:
+    """Kit-caused byproduct files inside kit-reserved locations only."""
+    scan_roots: list[Path] = []
+    local_root = root / ".agent-project-kit"
+    if local_root.is_dir() and not local_root.is_symlink():
+        scan_roots.append(local_root)
+    for provider in (".agents", ".claude"):
+        skills_root = root / provider / "skills"
+        if skills_root.is_dir() and not skills_root.is_symlink():
+            scan_roots.extend(
+                child
+                for child in skills_root.iterdir()
+                if child.name.startswith("agent-kit-")
+                and child.is_dir()
+                and not child.is_symlink()
+            )
+    if common_root.is_dir() and not common_root.is_symlink():
+        scan_roots.append(common_root)
+    found: list[Path] = []
+    for base in scan_roots:
+        for item in base.rglob("*"):
+            if (
+                item.is_file()
+                and not item.is_symlink()
+                and is_runtime_byproduct(item.relative_to(base).as_posix())
+            ):
+                found.append(item)
+    return sorted(set(found))
+
+
 def reserved_collisions(root: Path, old: dict | None) -> list[str]:
     """Find files under kit-reserved prefixes that the manifest does not own."""
     allowed = set((old or {}).get("owned_paths", []))
@@ -929,6 +972,7 @@ def reserved_collisions(root: Path, old: dict | None) -> list[str]:
             path.relative_to(root).as_posix()
             for path in candidates
             if path.relative_to(root).as_posix() not in allowed
+            and not is_runtime_byproduct(path.relative_to(root).as_posix())
         }
     )
 
@@ -945,6 +989,7 @@ def common_reserved_collisions(common_root: Path, old: dict | None) -> list[str]
             for item in common_root.rglob("*")
             if (not item.is_dir() or item.is_symlink())
             and item.relative_to(common_root).as_posix() not in allowed
+            and not is_runtime_byproduct(item.relative_to(common_root).as_posix())
         }
     )
 
@@ -1165,7 +1210,7 @@ if previous is not None:
         if completed.returncode:
             raise SystemExit(completed.returncode)
 if name in {"pre-commit", "pre-push"}:
-    command = [sys.executable, str(base / "guard.py"), "git-" + name]
+    command = [sys.executable, "-B", str(base / "guard.py"), "git-" + name]
     completed = subprocess.run(command, input=stdin_data)
     raise SystemExit(completed.returncode)
 '''
@@ -1176,7 +1221,7 @@ def dispatcher_files(common_root: Path, previous_hooks: Path) -> dict[str, bytes
     result = {"dispatcher.py": DISPATCHER_SOURCE.encode("utf-8")}
     invocation = shlex.quote(str(common_root / "dispatcher.py"))
     for hook in HOOK_NAMES:
-        body = f'#!/bin/sh\nexec python3 {invocation} {shlex.quote(hook)} "$@"\n'
+        body = f'#!/bin/sh\nexec python3 -B {invocation} {shlex.quote(hook)} "$@"\n'
         result[f"hooks/{hook}"] = body.encode("utf-8")
     return result
 
@@ -2028,6 +2073,8 @@ def uninstall(root: Path, common: Path) -> int:
     )
     removal_paths.extend(common_root / rel for rel in common_owned_paths())
     removal_paths.extend(root / rel for rel in sorted(mutable_paths()))
+    byproduct_files = runtime_byproduct_files(root, common_root)
+    removal_paths.extend(byproduct_files)
     removal_paths.extend(config_paths.values())
     for rel in owned_paths():
         reject_symlink_escape(root, rel)
@@ -2177,6 +2224,11 @@ def uninstall(root: Path, common: Path) -> int:
             if backups[path][0]:
                 unlink_recorded(path, backups[path], post_states)
                 removed_mutable += 1
+        # Kit-caused byproducts (pycache/.DS_Store/stale locks) would surface in
+        # git status once the managed exclude is restored; remove them too.
+        for path in byproduct_files:
+            if backups[path][0]:
+                unlink_recorded(path, backups[path], post_states)
         unlink_recorded(manifest_path, backups[manifest_path], post_states)
         final_inventory = repository_worktree_roots(root)
         if not same_repository_inventory(initial_inventory, final_inventory):

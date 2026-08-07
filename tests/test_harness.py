@@ -2023,6 +2023,40 @@ class AgentPayloadTests(RepositoryFixture):
             self.assertIn(token, rules)
 
 
+class RuntimeByproductTests(RepositoryFixture):
+    def test_pycache_lock_and_dsstore_do_not_block_reinstall_or_uninstall(self) -> None:
+        assert_ok(self, self.bootstrap())
+        pycache = self.repo / ".agent-project-kit/hooks/__pycache__"
+        pycache.mkdir(parents=True)
+        (pycache / "guard.cpython-314.pyc").write_bytes(b"\x00fake-bytecode")
+        (self.repo / ".agent-project-kit/CONTEXT.md.lock").write_text("")
+        (self.repo / ".agent-project-kit/.DS_Store").write_bytes(b"\x00")
+        common_pycache = git_common_dir(self.repo) / "agent-project-kit/__pycache__"
+        common_pycache.mkdir(parents=True)
+        (common_pycache / "guard.cpython-314.pyc").write_bytes(b"\x00fake-bytecode")
+
+        assert_ok(self, self.bootstrap())
+        assert_ok(self, self.bootstrap("--doctor"))
+        assert_ok(self, self.bootstrap("--uninstall"))
+        self.assertFalse((pycache / "guard.cpython-314.pyc").exists())
+        self.assertFalse((self.repo / ".agent-project-kit/CONTEXT.md.lock").exists())
+        self.assertEqual(status(self.repo), b"")
+
+    def test_hook_invocations_disable_bytecode_cache(self) -> None:
+        assert_ok(self, self.bootstrap())
+        settings = (self.repo / ".claude/settings.local.json").read_text(
+            encoding="utf-8"
+        )
+        codex = (self.repo / ".codex/hooks.json").read_text(encoding="utf-8")
+        self.assertIn("python3 -B", settings)
+        self.assertIn("python3 -B", codex)
+        common_root = git_common_dir(self.repo) / "agent-project-kit"
+        hook = (common_root / "hooks/pre-commit").read_text(encoding="utf-8")
+        self.assertIn("python3 -B", hook)
+        dispatcher = (common_root / "dispatcher.py").read_text(encoding="utf-8")
+        self.assertIn('"-B"', dispatcher)
+
+
 class SharedDocumentCommitTests(RepositoryFixture):
     def write_shared_docs_and_user_skill(self) -> Path:
         (self.repo / "AGENTS.md").write_text(
