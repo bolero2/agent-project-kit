@@ -283,8 +283,8 @@ worktree scope를 명시한 뒤 linked worktree에 설치할 수 있다. 설치 
 
 | Agent | 트리거 예시 | 하는 일 |
 |---|---|---|
-| `review-killer` | "PR #111 리뷰 처리해줘" | PR 리뷰 모니터링(30초×40~60회)·blocker 동시 감시·Blocker/Major 처리(수정/반박/보류)·상태 기반 종료("머지 가능합니다" 통보, merge는 하지 않음) |
-| `reviewer` | "이 PR 리뷰하고 결과는 코멘트로 작성하라", "재리뷰 진행해" | PR diff·CI를 읽고 Blocker/Major/Minor 등급 리뷰를 PR 코멘트 1건으로 게시·신규 커밋과 대응 코멘트를 폴링해 재리뷰·수렴 시 "머지 가능합니다" 통보 (읽기 전용 — 코드 수정·merge·approve 없음) |
+| `review-killer` | "PR #111 리뷰 처리해줘" | 리뷰 모니터링(30초×30회 사이클, 무변화면 재진입)·blocker 동시 감시·Blocker/Major 처리(수정/반박/보류)·라운드당 코멘트 1건·리뷰 측의 머지 OK 신호를 확인해야만 종료(merge는 하지 않음) |
+| `reviewer` | "이 PR 리뷰하고 결과는 코멘트로 작성하라", "재리뷰 진행해" | PR diff·CI를 읽고 Blocker/Major/Minor 등급 리뷰를 PR 코멘트 1건으로 게시·신규 커밋과 대응 코멘트를 폴링해 재리뷰·체크리스트 7개를 전부 충족해야 `ready to merge` 판정 (읽기 전용 — 코드 수정·merge·approve 없음) |
 | `developer` | "작업 시작하자", "Agent와 개발 진행할래" | Jira 보드에서 담당 티켓 선정·잠금 코멘트·구현·테스트/QA 후 **승인 게이트를 거쳐** commit/PR·티켓 이동 |
 
 - 본문은 `payload/agents/<name>/AGENT.md` 한 벌이며, Claude Code에는 `.claude/agents/<name>.md`
@@ -309,11 +309,19 @@ worktree scope를 명시한 뒤 linked worktree에 설치할 수 있다. 설치 
 세션 B: reviewer       →  PR 코멘트로 Blocker/Major/Minor 리뷰
 ```
 
-- 각 Agent는 상대의 상태 마커를 신호로 쓴다: review-killer는 `<!-- reviewer-state: ... -->`
-  코멘트 증가를, reviewer는 head sha 변경 또는 자기 마커가 없는 코멘트 증가를 감지한다.
-- reviewer가 `verdict=converged`를 남기면 그것이 머지 OK 신호다. 두 Agent 모두 merge와
-  approve는 하지 않으며 사용자에게 "머지 가능합니다"로 통보만 한다.
+- **코멘트가 유일한 신호다.** 리뷰 측은 라운드당 `## 🔍 Code Review — round N` 코멘트 1건,
+  대응 측은 커밋을 몇 번 하든 라운드당 `## 🛠 Review Response — round N` 코멘트 1건을 남긴다.
+  코멘트 제목에 Agent 이름은 쓰지 않는다.
+- 각 Agent는 상대의 상태 마커를 신호로 쓴다: 대응 측은 `<!-- pr-review-state: ... -->`
+  코멘트 증가를, 리뷰 측은 head sha 변경 또는 자기 마커가 없는 코멘트 증가를 감지한다.
+- 리뷰 측이 `verdict=ready`(`Verdict: no blocking findings — ready to merge`)를 남기면 그것이
+  머지 OK 신호다. **GitHub의 `mergeable=MERGEABLE`은 머지 충돌이 없다는 뜻일 뿐 리뷰 판정이
+  아니며, 어느 Agent도 그것을 근거로 종료하지 않는다.**
+- 종료는 세 가지뿐이다: 머지 OK 판정, 무한 루프 수렴(미해소를 명시하고 종료), 컨텍스트 한도.
+  폴링 사이클이 무변화로 끝나는 것은 종료 사유가 아니라 재진입 사유다.
 - 어느 한쪽만 붙여도 동작한다. 상대가 사람이거나 외부 리뷰봇이어도 규약은 같다.
+- 두 세션의 킷 버전이 다르면 마커가 어긋날 수 있다. 양쪽 다 1.7.0 이상으로 재설치하는 것을
+  권장한다(구버전 마커 `reviewer-state`/`review-killer-state`도 상대 식별에는 인정한다).
 
 “local이 global을 항상 override한다”는 이식 가능한 규칙은 없다. Claude Code는 같은 이름에서
 enterprise → personal → project 순이며 이 세 범위의 스킬은 bundled skill을 대체한다. Codex는

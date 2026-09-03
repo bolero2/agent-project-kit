@@ -2041,6 +2041,36 @@ class AgentPayloadTests(RepositoryFixture):
                 self.read_agent_body(name),
             )
 
+    def test_review_pair_agents_use_neutral_interlocking_markers(self) -> None:
+        reviewer = self.read_agent_body("reviewer")
+        killer = self.read_agent_body("review-killer")
+        # 각자 자기 마커를 쓰고 상대 마커를 신호로 참조해야 짝짓기 루프가 성립한다.
+        self.assertIn("pr-review-state", reviewer)
+        self.assertIn("pr-review-reply-state", killer)
+        self.assertIn("pr-review-state", killer)
+        # 코멘트 제목에 Agent 이름을 노출하지 않는다.
+        for body in (reviewer, killer):
+            self.assertIn("Agent 이름", body)
+        self.assertIn("Code Review — round", reviewer)
+        self.assertIn("Review Response — round", killer)
+
+    def test_review_pair_agents_separate_github_state_from_verdict(self) -> None:
+        for name in ("reviewer", "review-killer"):
+            body = self.read_agent_body(name)
+            # mergeable/CLEAN을 리뷰 판정으로 쓰지 말라는 계약이 본문에 있어야 한다.
+            self.assertIn("mergeable=MERGEABLE", body)
+            self.assertIn("머지 충돌", body)
+            self.assertIn("리뷰 판정이 아니다", body)
+
+    def test_review_pair_agents_require_completion_not_single_round(self) -> None:
+        for name in ("reviewer", "review-killer"):
+            body = self.read_agent_body(name)
+            # 무변화 사이클은 재진입 사유이지 종료 사유가 아니다.
+            self.assertIn("종료 사유가 아니다", body)
+            self.assertIn("종료가 허용되는 경우는 다음 3가지뿐이다", body)
+            # 라운드당 코멘트 1건 규약.
+            self.assertIn("코멘트 정확히 1건", body)
+
     def test_agent_rules_payload_covers_mandated_rules(self) -> None:
         rules = (ROOT / "payload/runtime/AGENT-RULES.md").read_text(encoding="utf-8")
         for token in (
