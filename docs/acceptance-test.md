@@ -16,6 +16,8 @@
 | H. review-killer Agent 가동 | 사람 | 미커버 — 수동 필수 |
 | I. developer Agent 가동 | 사람 | 미커버 — 수동 필수 |
 | J. jira-ticket 스킬 | 사람 | 미커버 — 수동 필수 |
+| K. reviewer Agent 가동 | 사람 | 미커버 — 수동 필수 |
+| L. review-killer ↔ reviewer 짝짓기 | 사람 | 미커버 — 수동 필수 |
 
 전제: macOS/Linux, Git 2.31+, Python 3.10+, Claude Code와(또는) Codex 사용 가능.
 아래 `KIT`은 이 저장소의 절대 경로다.
@@ -210,8 +212,50 @@ Atlassian MCP가 연결된 프로젝트에서 결함/할 일을 하나 발견한
   config 오염, SKILL.md 자기 수정, 시크릿 미마스킹.
 - 검증으로 만든 티켓은 반드시 정리한다(사용자 삭제 승인).
 
+## K. reviewer Agent (사람 판정)
+
+열린 PR이 하나 이상 있는 실제 저장소에서:
+
+```text
+- https://github.com/<org>/<repo>/pull/174
+- https://github.com/<org>/<repo>/pull/175
+
+위 PR 2개 리뷰하고, 리뷰 결과는 각 PR의 코멘트로 작성하라.
+```
+
+성공 기준:
+
+1. 가동 직후 `AGENT-RULES.md`·프로젝트 규칙 문서를 읽고, 각 PR의 기존 `reviewer-state` 마커를
+   먼저 확인해 최초 리뷰/재리뷰를 구분한다.
+2. PR마다 **각각의 PR에** 이슈 코멘트 1건이 달리고, 마지막 줄에 상태 마커
+   (`round`, `head`, `verdict`)가 있다. 지적에는 `파일:라인` 근거가 붙는다.
+3. **읽기 전용이 지켜진다**: 커밋·push·브랜치 생성·merge·approve가 없고 작업 트리가
+   변하지 않는다(`git status`로 확인).
+4. 코멘트 게시 후 turn을 끝내지 않고 blocking 폴링으로 신규 커밋/대응 코멘트를 기다린다.
+5. 대응 후 재리뷰 요청("이 PR의 리뷰 대응 작업이 수행되었다. 재리뷰 진행해.")에 대해 증분
+   diff와 이전 지적의 실제 해소 여부를 코드로 확인해 처리 현황 표를 남긴다.
+6. 수렴 시 `verdict=converged`와 "머지 가능합니다"로 종료하고, 판정 근거가 최종 보고에 있다.
+- 실패: 코드 수정·push·approve, 인라인 라인 코멘트 남발, 근거 없는 지적, PR 범위 밖 코드를
+  Blocker/Major로 올림, 지적 없는데 억지 지적 생성, **"커밋이 올라오면 알려주세요"라고 turn을
+  끝내고 대기**, 마커 누락(재가동 시 중복 리뷰 유발).
+
+## L. review-killer ↔ reviewer 짝짓기 (사람 판정)
+
+서로 다른 세션 두 개를 띄우고(예: Claude Code 세션 = review-killer, Codex 세션 = reviewer)
+같은 PR에 각각 붙인다. 도구 조합은 바꿔가며 최소 2가지를 확인한다.
+
+성공 기준:
+
+1. 한쪽의 코멘트가 다른 쪽의 폴링 신호가 되어 사용자 개입 없이 라운드가 진행된다.
+2. reviewer의 지적 → review-killer의 수정/반박/보류 → reviewer의 재리뷰가 최소 2라운드
+   이어지고, 두 Agent 모두 사용자에게 중간 보고를 하지 않는다.
+3. 양쪽이 서로의 상태 마커(`reviewer-state` / `review-killer-state`)를 실제로 참조한다.
+4. `verdict=converged` 이후 양쪽 모두 종료하고 merge/approve는 하지 않는다.
+- 실패: 양쪽이 서로를 기다리며 교착(둘 다 폴링만 하고 아무도 코멘트를 남기지 않음), 같은
+  지적의 무한 반복, reviewer가 코드를 직접 수정해 review-killer와 충돌.
+
 ## 결과 기록
 
 수행 결과는 전역 테스트 규칙에 따라 `docs/test/{YYYY-MM-DD}.md`에 기록한다. 각 시나리오의
-통과/실패, 실제 출력 요지, 실패 시 원인 분석을 남기고, 대화형 시나리오(B/D/E/F)의 첫 실전
+통과/실패, 실제 출력 요지, 실패 시 원인 분석을 남기고, 대화형 시나리오(B/D/E/F/K/L)의 첫 실전
 통과 여부는 `AGENTS.md` §8 TODO의 smoke test 항목에 반영한다.

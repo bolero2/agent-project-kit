@@ -139,8 +139,8 @@ agent-kit-wrap-up 스킬로 완료 이력을 압축하고, 검증 결과와 남�
 
 ## 2-B. 커스텀 Agent 사용
 
-킷은 두 개의 커스텀 Agent를 설치한다(Claude Code `.claude/agents/`, Codex `.codex/agents/`).
-둘 다 **트리거 문구로만 가동**되고, 가동 직후 `AGENT-RULES.md`·필수 문서를 정독하며, 모호한
+킷은 세 개의 커스텀 Agent를 설치한다(Claude Code `.claude/agents/`, Codex `.codex/agents/`).
+전부 **트리거 문구로만 가동**되고, 가동 직후 `AGENT-RULES.md`·필수 문서를 정독하며, 모호한
 것은 반드시 질문하고 답을 받을 때까지 대기한다.
 
 가동 후 대기는 Agent가 폴링(sleep→조회)으로 직접 수행한다. Agent가 "리뷰가 올라오면/티켓을
@@ -159,6 +159,38 @@ review-killer agent로 PR #111 리뷰 처리해 줘.
 - 수렴/approve 시 "머지 가능합니다"로 끝난다. **merge는 직접 하지 않는다.**
 - 타임아웃(약 30분 리뷰 없음) 후에는 "리뷰 자동 처리 계속 진행해 줘"로 재개한다.
 - 첫 가동 시 리뷰봇 식별자와 QA 방법을 물어보고 CONTEXT에 기억한다.
+
+### reviewer — PR 리뷰 자동 수행
+
+```text
+- https://github.com/<org>/<repo>/pull/174
+- https://github.com/<org>/<repo>/pull/175
+
+위 PR 2개 리뷰하고, 리뷰 결과는 각 PR의 코멘트로 작성하라.
+```
+
+재리뷰는 이렇게 요청한다.
+
+```text
+https://github.com/<org>/<repo>/pull/174
+이 PR의 리뷰 대응 작업이 수행되었다. 재리뷰 진행해.
+```
+
+- **읽기 전용이다.** 코드 수정·commit·push·merge·approve를 하지 않는다. 수정은 대응 측
+  (review-killer 또는 사람)의 몫이다.
+- 라운드마다 PR 이슈 코멘트 1건에 Blocker/Major/Minor와 이전 지적 처리 현황을 남기고, 마지막
+  줄에 `<!-- reviewer-state: round=N; head=<sha>; ...; verdict=... -->` 마커를 붙인다.
+- 게시 후에는 30초×40~60회 폴링하며 **신규 커밋(head sha 변경)** 또는 **대응 코멘트 증가**를
+  감지해 재리뷰한다. 재리뷰는 마지막 head 이후의 증분 diff와 이전 지적의 실제 해소 여부를 본다.
+- 새 Blocker/Major가 없고 이전 지적이 모두 닫히면 `verdict=converged`와 함께 "머지 가능합니다"
+  를 남기고 종료한다. 같은 지적을 2회 재요청해도 해소되지 않으면 "미해소"로 명시하고 종료한다.
+- 타임아웃(약 30분 변화 없음) 후에는 "재리뷰 진행해"로 재개한다.
+
+### review-killer ↔ reviewer 짝짓기
+
+서로 다른 세션에 하나씩 붙이면 두 Agent가 PR 코멘트만으로 티키타카하며 수렴한다. 예: Claude
+Code 세션에 review-killer, Codex 세션에 reviewer(반대도 가능하고, 같은 도구 두 세션도 가능).
+사용자는 양쪽을 한 번씩 가동한 뒤 종료 보고만 받으면 된다.
 
 ### developer — Jira 티켓 처리
 

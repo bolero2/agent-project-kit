@@ -39,7 +39,7 @@ flowchart LR
 - `CONTEXT.md`, `HANDOFF.md`
 - 초기화, 편입, handoff, wrap-up, skill-sync 스킬
 - `AGENTS.md`(canonical)·`CLAUDE.md`(포인터) 생성·병합용 템플릿
-- 커스텀 Agent 본문(review-killer, developer)과 `AGENT-RULES.md` 공통 계약
+- 커스텀 Agent 본문(review-killer, reviewer, developer)과 `AGENT-RULES.md` 공통 계약
 - staged/outgoing commit 및 시크릿 검사
 - 파괴적 shell 명령 탐지
 

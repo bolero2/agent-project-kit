@@ -26,7 +26,7 @@ SKILL_NAMES = (
     "update",
     "jira-ticket",
 )
-AGENT_NAMES = ("developer", "review-killer")
+AGENT_NAMES = ("developer", "review-killer", "reviewer")
 OWNED_PATHS = (
     ".agent-project-kit/AGENT-RULES.md",
     ".agent-project-kit/jira-ticket.config.json",
@@ -1843,8 +1843,11 @@ class SchemaMigrationTests(RepositoryFixture):
             legacy_kit / "payload",
             ignore=shutil.ignore_patterns("__pycache__", ".DS_Store"),
         )
-        shutil.rmtree(legacy_kit / "payload/skills/agent-kit-jira-ticket")
-        (legacy_kit / "payload/runtime/jira-ticket.config.json").unlink()
+        if version < 6:
+            shutil.rmtree(legacy_kit / "payload/agents/reviewer")
+        if version < 5:
+            shutil.rmtree(legacy_kit / "payload/skills/agent-kit-jira-ticket")
+            (legacy_kit / "payload/runtime/jira-ticket.config.json").unlink()
         if version < 4:
             shutil.rmtree(legacy_kit / "payload/skills/agent-kit-update")
         if version < 3:
@@ -1898,6 +1901,36 @@ class SchemaMigrationTests(RepositoryFixture):
         self.install_legacy_v1()
         assert_ok(self, self.bootstrap("--uninstall"))
         for rel in kit_core.owned_paths(1):
+            self.assertFalse((self.repo / rel).exists(), rel)
+        self.assertFalse(manifest_path(self.repo).exists())
+
+    def test_v5_install_upgrades_to_current_schema_with_reviewer_agent(self) -> None:
+        before = status(self.repo)
+        self.install_legacy(5)
+        self.assertFalse((self.repo / ".claude/agents/reviewer.md").exists())
+        self.assertFalse((self.repo / ".codex/agents/reviewer.toml").exists())
+        self.assertTrue(
+            (self.repo / ".claude/skills/agent-kit-jira-ticket/SKILL.md").is_file()
+        )
+
+        assert_ok(self, self.bootstrap())
+
+        manifest = json.loads(manifest_path(self.repo).read_text(encoding="utf-8"))
+        self.assertEqual(manifest["schema_version"], kit_core.SCHEMA_VERSION)
+        for rel in OWNED_PATHS:
+            self.assertTrue((self.repo / rel).is_file(), rel)
+        exclude = git_common_dir(self.repo) / "info/exclude"
+        data = exclude.read_bytes()
+        self.assertEqual(data.count(kit_core.BLOCK_START.encode("utf-8")), 1)
+        self.assertIn(b"/.claude/agents/reviewer.md", data)
+        self.assertIn(b"/.codex/agents/reviewer.toml", data)
+        self.assertEqual(status(self.repo), before)
+        assert_ok(self, self.bootstrap("--doctor"))
+
+    def test_v5_install_is_uninstallable_directly_with_current_kit(self) -> None:
+        self.install_legacy(5)
+        assert_ok(self, self.bootstrap("--uninstall"))
+        for rel in kit_core.owned_paths(5):
             self.assertFalse((self.repo / rel).exists(), rel)
         self.assertFalse(manifest_path(self.repo).exists())
 

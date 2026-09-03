@@ -183,9 +183,13 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 - [x] Jira 티켓 생성 스킬(agent-kit-jira-ticket) — `jira-ticket-skill-manual.md` 기반, 승인
   게이트·config 부트스트랩·스프린트 숫자 id 규칙 반영. config는 `.agent-project-kit/`의
   mutable seed 한 벌(schema v5, 테스트 84개 통과)
+- [x] `reviewer` Agent — PR 리뷰 수행 측(읽기 전용, 라운드당 코멘트 1건 + `reviewer-state`
+  마커, head sha/대응 코멘트 폴링, `verdict=converged` 종료). review-killer와 마커로 짝을
+  이루며 두 세션이 사람 개입 없이 수렴한다. schema v6, 테스트 92개 통과
 - [ ] 남은 Agent smoke test: developer 완료 단계(잠금 해제·"리뷰 중" 이동)와 착수 이동
   재검증, review-killer 실제 PR 가동(폴링·처리·수렴 종료), Codex `.codex/agents` 인식 확인,
-  jira-ticket 스킬 시나리오 J 실측
+  jira-ticket 스킬 시나리오 J 실측, reviewer 단독 가동(시나리오 K)과 review-killer ↔ reviewer
+  짝짓기(시나리오 L) 실측
 - 릴리스 단계에서 repository-local `bolero2` author로 `master`에 commit/push하고 CI를 확인한다.
 
 ## 9. 환경

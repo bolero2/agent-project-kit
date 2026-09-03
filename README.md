@@ -12,7 +12,8 @@ Claude Code와 Codex가 같은 프로젝트에서 교대 작업할 수 있게 �
 | `AGENTS.md`/`CLAUDE.md` 생성·병합 | init/adopt 스킬이 인터뷰·승인 하에 수행 |
 | 도구 전환·세션 인수인계 | `agent-kit-handoff` → 다음 도구가 HANDOFF 자동 복원 |
 | 사용자 스킬을 두 도구에 배포 | `agent-kit-skill-sync` |
-| PR 리뷰 자동 처리 | `review-killer` Agent — "PR #N 리뷰 처리해줘" |
+| PR 리뷰 자동 처리(대응) | `review-killer` Agent — "PR #N 리뷰 처리해줘" |
+| PR 리뷰 자동 수행 | `reviewer` Agent — "이 PR 리뷰하고 결과는 코멘트로 작성하라" |
 | Jira 티켓 자동 개발 | `developer` Agent — "작업 시작하자" |
 | 상태 진단 / 제거 | `--doctor` / `--uninstall` |
 
@@ -124,8 +125,9 @@ symlink가 있으면 덮어쓰지 않고 설치 전에 실패한다.
 | 도구 바꾸기 전 | "agent-kit-handoff 스킬로 지금 상태 정리해 줘" |
 | 세션/마일스톤 마무리 | "agent-kit-wrap-up 스킬로 마무리해 줘" |
 | 스킬 만들기·수정·삭제 | "~하는 스킬 만들어 줘" (skill-sync 절차로 두 도구에 동일 반영) |
-| PR 리뷰 자동 처리 | "review-killer agent로 PR #111 리뷰 처리해 줘" |
-| 타임아웃 후 재개 | "리뷰 자동 처리 계속 진행해 줘" |
+| PR 리뷰 자동 처리(대응) | "review-killer agent로 PR #111 리뷰 처리해 줘" |
+| PR 리뷰 자동 수행 | "아래 PR 2개 리뷰하고, 리뷰 결과는 각 PR의 코멘트로 작성하라" |
+| 타임아웃 후 재개 | "리뷰 자동 처리 계속 진행해 줘" / "재리뷰 진행해" |
 | Jira 티켓 개발 | "developer agent로 작업 시작하자" (보드/담당자 미지정 시 CONTEXT 기억값 사용) |
 | 이어받은 세션 시작 | "HANDOFF 확인하고 이어서 해 줘" (Claude Code는 자동 로드, 명시하면 더 확실) |
 | 킷 업데이트 확인 | "agent-kit-update 스킬로 킷 업데이트 확인해 줘" (하루 1회는 자동 확인) |
@@ -218,7 +220,7 @@ Git 저장소에는 `--lite`를 쓸 수 없다.
 | `.agent-project-kit/hooks/guard.py` | 두 도구가 호출하는 공통 안전 검사 |
 | `.agent-project-kit/templates/*.template.md` | init/adopt가 쓰는 `AGENTS.md`·`CLAUDE.md` 템플릿 |
 | `.agent-project-kit/AGENT-RULES.md` | 커스텀 Agent 공통 계약 (가동 절차·질문 원칙·Git/QA 규칙·lock) |
-| `.claude/agents/<name>.md` | Claude Code용 커스텀 Agent 정의 (developer, review-killer) |
+| `.claude/agents/<name>.md` | Claude Code용 커스텀 Agent 정의 (developer, review-killer, reviewer) |
 | `.codex/agents/<name>.toml` | Codex용 커스텀 Agent 정의 — 같은 AGENT.md payload에서 설치 시 생성 |
 | `AGENTS.override.md` | Codex가 공통 컨텍스트와 기존 `AGENTS.md`를 읽게 하는 얇은 어댑터 |
 | `CLAUDE.local.md` | Claude Code가 공통 컨텍스트를 읽게 하는 얇은 어댑터 |
@@ -282,6 +284,7 @@ worktree scope를 명시한 뒤 linked worktree에 설치할 수 있다. 설치 
 | Agent | 트리거 예시 | 하는 일 |
 |---|---|---|
 | `review-killer` | "PR #111 리뷰 처리해줘" | PR 리뷰 모니터링(30초×40~60회)·blocker 동시 감시·Blocker/Major 처리(수정/반박/보류)·상태 기반 종료("머지 가능합니다" 통보, merge는 하지 않음) |
+| `reviewer` | "이 PR 리뷰하고 결과는 코멘트로 작성하라", "재리뷰 진행해" | PR diff·CI를 읽고 Blocker/Major/Minor 등급 리뷰를 PR 코멘트 1건으로 게시·신규 커밋과 대응 코멘트를 폴링해 재리뷰·수렴 시 "머지 가능합니다" 통보 (읽기 전용 — 코드 수정·merge·approve 없음) |
 | `developer` | "작업 시작하자", "Agent와 개발 진행할래" | Jira 보드에서 담당 티켓 선정·잠금 코멘트·구현·테스트/QA 후 **승인 게이트를 거쳐** commit/PR·티켓 이동 |
 
 - 본문은 `payload/agents/<name>/AGENT.md` 한 벌이며, Claude Code에는 `.claude/agents/<name>.md`
@@ -293,7 +296,24 @@ worktree scope를 명시한 뒤 linked worktree에 설치할 수 있다. 설치 
   브랜치명에만 Jira 번호 금지(`feat/<slug>` 네이밍 — 커밋·PR 제목은 스킬 규약 준수),
   상위 모델 필요 시 재가동 요청,
   공유 문서 갱신 시 `<파일>.lock` 규약.
-- 두 Agent 모두 명시 호출 방식이다. 세션 자동 가동은 실측 검증 후 승격을 검토한다.
+- 모든 Agent가 명시 호출 방식이다. 세션 자동 가동은 실측 검증 후 승격을 검토한다.
+
+### review-killer ↔ reviewer 짝짓기
+
+두 Agent는 PR 코멘트만으로 주고받으며 수렴하도록 설계된 한 쌍이다. 서로 다른 세션(도구는
+같아도 되고 달라도 된다)에 하나씩 붙인다.
+
+```text
+세션 A: review-killer  →  PR 코멘트로 수정/반박/보류 + push
+                     ↕  (PR 코멘트 + head sha)
+세션 B: reviewer       →  PR 코멘트로 Blocker/Major/Minor 리뷰
+```
+
+- 각 Agent는 상대의 상태 마커를 신호로 쓴다: review-killer는 `<!-- reviewer-state: ... -->`
+  코멘트 증가를, reviewer는 head sha 변경 또는 자기 마커가 없는 코멘트 증가를 감지한다.
+- reviewer가 `verdict=converged`를 남기면 그것이 머지 OK 신호다. 두 Agent 모두 merge와
+  approve는 하지 않으며 사용자에게 "머지 가능합니다"로 통보만 한다.
+- 어느 한쪽만 붙여도 동작한다. 상대가 사람이거나 외부 리뷰봇이어도 규약은 같다.
 
 “local이 global을 항상 override한다”는 이식 가능한 규칙은 없다. Claude Code는 같은 이름에서
 enterprise → personal → project 순이며 이 세 범위의 스킬은 bundled skill을 대체한다. Codex는

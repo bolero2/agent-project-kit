@@ -28,9 +28,11 @@
 
 ## 커스텀 Agent
 
-- 설치된 Agent: `review-killer`(PR 리뷰 자동 처리), `developer`(Jira 티켓 처리). 공통 계약은
+- 설치된 Agent: `review-killer`(PR 리뷰 대응), `reviewer`(PR 리뷰 수행),
+  `developer`(Jira 티켓 처리). 공통 계약은
   `.agent-project-kit/AGENT-RULES.md`에 있고 Agent는 가동 직후 이를 정독한다.
-- Agent는 사용자의 트리거 문구로만 가동한다 (예: "PR #111 리뷰 처리해줘", "작업 시작하자").
+- Agent는 사용자의 트리거 문구로만 가동한다 (예: "PR #111 리뷰 처리해줘",
+  "이 PR 리뷰하고 결과는 코멘트로 작성하라", "작업 시작하자").
   세션 시작만으로 자동 가동하지 않는다.
 - 공유 상태 문서 수정 시 `<파일명>.lock` 규약을 따른다: lock이 있으면 대기, 수정 시 lock 생성
   후 즉시 삭제.
@@ -51,7 +53,7 @@
 - 보안/데이터 경계: TBD
 - 반복해서 발생한 지뢰: TBD
 - QA 방법 (Agent용): TBD
-- 리뷰봇 식별자 (review-killer용): TBD
+- 리뷰봇 식별자 (review-killer용): TBD — 상대가 킷 `reviewer` Agent면 `reviewer-state`
 - Jira 보드/담당자 (developer용): TBD
 - commit/PR 승인 게이트 (developer용): 활성
 - 킷 저장소 경로: TBD

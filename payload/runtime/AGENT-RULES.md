@@ -1,7 +1,7 @@
 # Agent 공통 규칙 (local-only)
 
-> 이 프로젝트에 설치된 모든 커스텀 Agent(review-killer, developer 등)가 가동 직후 정독하고
-> 준수해야 하는 공통 계약이다. `CONTEXT.md`의 공통 규칙에 더해 적용된다.
+> 이 프로젝트에 설치된 모든 커스텀 Agent(review-killer, reviewer, developer 등)가 가동
+> 직후 정독하고 준수해야 하는 공통 계약이다. `CONTEXT.md`의 공통 규칙에 더해 적용된다.
 
 ## 가동 절차
 
@@ -82,9 +82,9 @@
 ## 킷 소유 파일 무수정
 
 - 설치된 킷 소유 파일 — `agent-kit-*` 스킬, 킷 Agent 정의(`.claude/agents/`·`.codex/agents/`의
-  developer/review-killer), 이 `AGENT-RULES.md`, `CLAUDE.local.md`, `AGENTS.override.md`,
-  guard·hook 설정 — 은 **수정하지 않는다.** 선의의 "개선"도 금지다(수정 시 doctor가 드리프트로
-  감지하고 재설치·제거가 중단된다).
+  developer/review-killer/reviewer), 이 `AGENT-RULES.md`, `CLAUDE.local.md`,
+  `AGENTS.override.md`, guard·hook 설정 — 은 **수정하지 않는다.** 선의의 "개선"도 금지다
+  (수정 시 doctor가 드리프트로 감지하고 재설치·제거가 중단된다).
 - 개선이 필요하면 그 내용을 사용자에게 보고한다. 반영은 킷 저장소(agent-project-kit)에서
   수정 후 재설치로만 이뤄진다.
 - 예외는 mutable state인 `CONTEXT.md`/`HANDOFF.md` 둘뿐이며, 이 둘은 오히려 갱신이 의무다.

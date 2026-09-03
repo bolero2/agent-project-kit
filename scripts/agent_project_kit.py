@@ -24,7 +24,7 @@ from typing import Callable, Iterable
 
 
 KIT_NAME = "agent-project-kit"
-KIT_VERSION = "1.5.0"
+KIT_VERSION = "1.6.0"
 BLOCK_START = "# >>> agent-project-kit managed (local-only; do not edit)"
 BLOCK_END = "# <<< agent-project-kit managed"
 HOOK_CONFIG_START = "# >>> agent-project-kit core.hooksPath (managed; do not edit)"
@@ -62,13 +62,14 @@ HOOK_NAMES = (
 # Owned-path schema history. Every shipped schema version is frozen here so a
 # manifest written by an older kit can still be validated, upgraded in place,
 # and uninstalled without trusting the manifest's own allowlists.
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 SCHEMA_SKILLS: dict[int, tuple[str, ...]] = {
     1: ("init", "adopt", "handoff", "wrap-up"),
     2: ("init", "adopt", "handoff", "wrap-up", "skill-sync"),
     3: ("init", "adopt", "handoff", "wrap-up", "skill-sync"),
     4: ("init", "adopt", "handoff", "wrap-up", "skill-sync", "update"),
     5: ("init", "adopt", "handoff", "wrap-up", "skill-sync", "update", "jira-ticket"),
+    6: ("init", "adopt", "handoff", "wrap-up", "skill-sync", "update", "jira-ticket"),
 }
 SCHEMA_TEMPLATES: dict[int, tuple[str, ...]] = {
     1: (),
@@ -76,6 +77,7 @@ SCHEMA_TEMPLATES: dict[int, tuple[str, ...]] = {
     3: ("AGENTS.template.md", "CLAUDE.template.md"),
     4: ("AGENTS.template.md", "CLAUDE.template.md"),
     5: ("AGENTS.template.md", "CLAUDE.template.md"),
+    6: ("AGENTS.template.md", "CLAUDE.template.md"),
 }
 SCHEMA_AGENTS: dict[int, tuple[str, ...]] = {
     1: (),
@@ -83,6 +85,7 @@ SCHEMA_AGENTS: dict[int, tuple[str, ...]] = {
     3: ("developer", "review-killer"),
     4: ("developer", "review-killer"),
     5: ("developer", "review-killer"),
+    6: ("developer", "review-killer", "reviewer"),
 }
 # Mutable per-machine config seeds deployed under .agent-project-kit/. They are
 # owned (preflight-safe) but user-editable and preserved across reinstalls.
@@ -92,6 +95,7 @@ SCHEMA_CONFIGS: dict[int, tuple[str, ...]] = {
     3: (),
     4: (),
     5: ("jira-ticket.config.json",),
+    6: ("jira-ticket.config.json",),
 }
 CODEX_AGENT_MODEL = "gpt-5.6-sol"
 CODEX_AGENT_REASONING = "high"
