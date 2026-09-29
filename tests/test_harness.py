@@ -1789,6 +1789,113 @@ class SecretHookTests(RepositoryFixture):
         self.assertEqual(result.returncode, 0, output(result))
 
 
+class GuardTargetRepositoryTests(RepositoryFixture):
+    """agent-hook은 hook payload의 cwd가 아니라 커밋 대상 저장소를 검사한다."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        assert_ok(self, self.bootstrap())
+        # 킷 manifest가 없는 별도 저장소(예: 작업 셸 아래의 공용 하위 저장소).
+        self.other = self.base / "other repo"
+        init_repo(self.other)
+
+    def invoke(
+        self, command: str, cwd: Path, event: str = "PreToolUse"
+    ) -> subprocess.CompletedProcess[bytes]:
+        guard = self.repo / ".agent-project-kit/hooks/guard.py"
+        return run(
+            "python3", guard, "agent-hook", input_bytes=hook_input(command, cwd, event)
+        )
+
+    def stage_secret(self, repo: Path) -> None:
+        (repo / "settings.py").write_text(f'API_KEY = "{"a1" * 12}"\n')
+        assert_ok(self, git(repo, "add", "settings.py"))
+
+    def stage_clean(self, repo: Path) -> None:
+        (repo / "feature.py").write_text("VALUE = 1\n")
+        assert_ok(self, git(repo, "add", "feature.py"))
+
+    def test_commit_via_dash_c_into_manifestless_repo_with_secret_is_blocked(
+        self,
+    ) -> None:
+        self.stage_secret(self.other)
+        result = self.invoke(f'git -C "{self.other}" commit -m x', self.repo)
+        self.assertEqual(result.returncode, 2, output(result))
+        self.assertIn("secret 의심 내용 staged: settings.py", output(result))
+        self.assertNotIn("manifest", output(result))
+
+    def test_clean_commit_via_dash_c_into_manifestless_repo_is_allowed(self) -> None:
+        self.stage_clean(self.other)
+        result = self.invoke(f'git -C "{self.other}" commit -m x', self.repo)
+        self.assertEqual(result.returncode, 0, output(result))
+
+    def test_relative_dash_c_and_git_dir_forms_resolve_the_target(self) -> None:
+        self.stage_secret(self.other)
+        commands = (
+            'git -C "other repo" commit -m x',
+            f'git -C "{self.repo}" -C "../other repo" commit -m x',
+            f'git --git-dir="{self.other}/.git" --work-tree="{self.other}" commit -m x',
+            f'git -c user.name=x -C "{self.other}" --no-pager commit -m x',
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                result = self.invoke(command, self.base)
+                self.assertEqual(result.returncode, 2, output(result))
+                self.assertIn("secret 의심 내용", output(result))
+
+    def test_session_cwd_in_manifestless_repo_no_longer_blocks_every_commit(
+        self,
+    ) -> None:
+        self.stage_clean(self.other)
+        result = self.invoke("git commit -m x", self.other)
+        self.assertEqual(result.returncode, 0, output(result))
+        stop = self.invoke("", self.other, event="Stop")
+        self.assertEqual(stop.returncode, 0, output(stop))
+        # 일반 검사(민감 파일명)는 그대로 적용된다.
+        (self.other / ".env").write_text("NAME=value\n")
+        assert_ok(self, git(self.other, "add", ".env"))
+        result = self.invoke("git commit -m x", self.other)
+        self.assertEqual(result.returncode, 2, output(result))
+        self.assertIn("민감 파일명 staged: .env", output(result))
+
+    def test_each_commit_in_a_compound_command_is_checked(self) -> None:
+        self.stage_clean(self.repo)
+        self.stage_secret(self.other)
+        command = (
+            f'git -C "{self.repo}" commit -m a && git -C "{self.other}" commit -m b'
+        )
+        result = self.invoke(command, self.base)
+        self.assertEqual(result.returncode, 2, output(result))
+        self.assertIn(str(self.other.resolve()), output(result))
+
+    def test_unresolvable_target_path_is_blocked(self) -> None:
+        result = self.invoke('git -C "$TARGET" commit -m x', self.repo)
+        self.assertEqual(result.returncode, 2, output(result))
+        self.assertIn("해석할 수 없음", output(result))
+
+    def test_kit_repo_protection_is_unchanged_when_targeted_from_elsewhere(
+        self,
+    ) -> None:
+        owned = ".agent-project-kit/CONTEXT.md"
+        assert_ok(self, git(self.repo, "add", "-f", owned))
+        result = self.invoke(f'git -C "{self.repo}" commit -m x', self.other)
+        self.assertEqual(result.returncode, 2, output(result))
+        self.assertIn(f"로컬 킷 경로 staged: {owned}", output(result))
+        assert_ok(self, git(self.repo, "rm", "-q", "--cached", owned))
+
+    def test_guard_host_repo_stays_strict_when_its_manifest_is_missing(self) -> None:
+        self.stage_clean(self.repo)
+        path = manifest_path(self.repo)
+        moved = path.with_name("manifest.json.moved")
+        path.rename(moved)
+        try:
+            result = self.invoke("git commit -m x", self.repo)
+        finally:
+            moved.rename(path)
+        self.assertEqual(result.returncode, 2, output(result))
+        self.assertIn("킷 manifest를 검증할 수 없음", output(result))
+
+
 class SchemaHistoryTests(unittest.TestCase):
     def test_older_schema_allowlists_are_strict_subsets_of_current(self) -> None:
         current_owned = set(kit_core.owned_paths())

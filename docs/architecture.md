@@ -200,6 +200,7 @@ project 순이고, 이 세 범위의 스킬은 bundled skill을 대체한다. Co
 |---|---|---|
 | `info/exclude` | 일반 status와 `git add -A` | 이미 tracked, `git add -f` |
 | pre-commit | force-add된 owned path와 staged secret | `--no-verify`, hook 설정 변경 |
+| agent commit hook | 에이전트의 `git [-C <path>] commit` 대상 저장소의 staged 검사 (manifest 없는 저장소는 일반 검사만) | 변수·치환 경로는 차단, 같은 명령 안에서 뒤늦게 stage되는 파일은 보지 못함 |
 | pre-push | guard를 우회해 만들어진 outgoing commit | `--no-verify`, 원격 외 전송 |
 | doctor | manifest/hash/exclude/hook/tracked drift | 실행하지 않으면 알림 없음 |
 | 원격 CI/정책 | 중앙 강제 | 이 로컬 킷 범위 밖 |

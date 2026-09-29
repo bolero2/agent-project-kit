@@ -360,7 +360,11 @@ enterprise → personal → project 순이며 이 세 범위의 스킬은 bundle
 
 - 파괴적 shell 명령: recursive force delete, pipe-to-shell, force push, 과도한 chmod,
   명백한 DB destructive command를 보수적으로 차단한다.
-- commit 시도: staged path와 내용에서 owned artifact와 대표 secret 패턴을 검사한다.
+- commit 시도: **커밋 대상 저장소**(`git -C <path>`·`--git-dir`/`--work-tree`를 해석, 복합 명령의
+  commit마다)의 staged path와 내용에서 owned artifact와 대표 secret 패턴을 검사한다. 킷 manifest가
+  없는 다른 저장소(예: 작업 셸 아래의 공용 하위 저장소)는 일반 검사(민감 파일명·secret 패턴)만
+  하고, 킷 설치 저장소는 manifest가 없어져도 엄격 검사를 유지한다. 변수·치환으로 된 대상 경로는
+  해석하지 않고 차단한다.
 - Stop 시점: 남아 있는 staged owned artifact와 대표 secret 패턴을 다시 검사한다.
 
 세션 시작의 공통 context/handoff 로딩은 hook이 아니라 `CLAUDE.local.md`와

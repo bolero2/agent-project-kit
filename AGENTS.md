@@ -198,6 +198,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
   (시나리오 L) 실측
 - [x] 2026-09-29 실사용 규칙 일반화 반영(kit 1.7.1~1.9.0): QA 증거·분리 브라우저, 폴링 사이클·
   전체 개수 신호, 외부 리뷰봇 모드, 행동 원칙, `agent-kit-qa-evidence` 스킬(schema v7)
+- [x] guard agent_hook 커밋 대상 저장소 판정(`git -C`/`--git-dir`) + manifest 없는 저장소는 일반 검사만
+  (kit 1.10.0, 테스트 110개 통과)
 - [ ] 남은 smoke test: 시나리오 M(qa-evidence — 분리된 브라우저 업로드 경로 실측), 외부 리뷰봇
   상대 review-killer 수렴 판정 재검증
 - 릴리스 단계에서 repository-local `bolero2` author로 `master`에 commit/push하고 CI를 확인한다.

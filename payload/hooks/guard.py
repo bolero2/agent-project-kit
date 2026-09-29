@@ -73,11 +73,30 @@ def repository(path: Path) -> Path | None:
     return Path(git_record(process.stdout)).resolve()
 
 
-def manifest(repo: Path) -> dict:
+def manifest_path(repo: Path) -> Path:
     result = git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir", check=True)
-    common = Path(git_record(result.stdout))
-    path = common / "agent-project-kit" / "manifest.json"
-    return json.loads(path.read_text(encoding="utf-8"))
+    return Path(git_record(result.stdout)) / "agent-project-kit" / "manifest.json"
+
+
+def manifest(repo: Path) -> dict:
+    return json.loads(manifest_path(repo).read_text(encoding="utf-8"))
+
+
+def kit_managed(repo: Path) -> bool:
+    """A repo is kit-managed if it has a kit manifest or hosts this guard copy.
+
+    The guard's own repository stays strict even when its manifest is missing
+    or damaged, so tampering with the ledger cannot downgrade its protection.
+    Any other repository without a manifest (for example a separate repo that
+    the agent commits into with ``git -C``) only gets the generic checks.
+    """
+    try:
+        if manifest_path(repo).exists():
+            return True
+    except RuntimeError:
+        return True
+    own = repository(Path(__file__).resolve().parent)
+    return own is not None and own == repo
 
 
 def owned(path: str, data: dict) -> bool:
@@ -121,14 +140,16 @@ def staged_paths(repo: Path) -> list[str]:
     return nul_paths(result.stdout) if result.returncode == 0 else []
 
 
-def staged_violations(repo: Path) -> list[str]:
-    try:
-        data = manifest(repo)
-    except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as error:
-        return [f"킷 manifest를 검증할 수 없음: {error}"]
+def staged_violations(repo: Path, *, managed: bool = True) -> list[str]:
+    data: dict | None = None
+    if managed:
+        try:
+            data = manifest(repo)
+        except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as error:
+            return [f"킷 manifest를 검증할 수 없음: {error}"]
     violations: list[str] = []
     for path in staged_paths(repo):
-        if owned(path, data):
+        if data is not None and owned(path, data):
             violations.append(f"로컬 킷 경로 staged: {path}")
             continue
         if sensitive_name(path):
@@ -298,16 +319,89 @@ def dangerous(command: str, depth: int = 0) -> list[str]:
     return sorted(set(reasons))
 
 
-def mentions_git_commit(command: str) -> bool:
+GIT_VALUE_OPTIONS = {"-c", "--namespace", "--config-env", "--super-prefix", "--exec-path"}
+UNRESOLVED = re.compile(r"[$`]")
+
+
+def git_subcommand(args: list[str]) -> tuple[str | None, list[str], str | None, str | None]:
+    """Split git global options: (subcommand, -C paths, --git-dir, --work-tree)."""
+    chdirs: list[str] = []
+    git_dir: str | None = None
+    work_tree: str | None = None
+    index = 0
+    while index < len(args):
+        item = args[index]
+        if item == "-C" and index + 1 < len(args):
+            chdirs.append(args[index + 1])
+            index += 2
+        elif item in {"--git-dir", "--work-tree"} and index + 1 < len(args):
+            if item == "--git-dir":
+                git_dir = args[index + 1]
+            else:
+                work_tree = args[index + 1]
+            index += 2
+        elif item.startswith("--git-dir="):
+            git_dir = item.split("=", 1)[1]
+            index += 1
+        elif item.startswith("--work-tree="):
+            work_tree = item.split("=", 1)[1]
+            index += 1
+        elif item in GIT_VALUE_OPTIONS and index + 1 < len(args):
+            index += 2
+        elif item.startswith("-"):
+            index += 1
+        else:
+            return item, chdirs, git_dir, work_tree
+    return None, chdirs, git_dir, work_tree
+
+
+def resolve_commit_target(cwd: Path, args: list[str]) -> tuple[Path | None, str | None]:
+    """Resolve the repository a ``git [-C ...] commit`` actually writes to."""
+    _, chdirs, git_dir, work_tree = git_subcommand(args)
+    for value in (*chdirs, git_dir or "", work_tree or ""):
+        if UNRESOLVED.search(value):
+            return None, f"git 대상 경로를 해석할 수 없음(변수·명령 치환은 지원하지 않음): {value}"
+    base = cwd
+    for value in chdirs:
+        candidate = Path(os.path.expanduser(value))
+        base = candidate if candidate.is_absolute() else base / candidate
+    if git_dir is None and work_tree is None:
+        return repository(base), None
+    options = []
+    if git_dir is not None:
+        options.append(f"--git-dir={os.path.expanduser(git_dir)}")
+    if work_tree is not None:
+        options.append(f"--work-tree={os.path.expanduser(work_tree)}")
+    top = git(base, *options, "rev-parse", "--show-toplevel")
+    target_dir = git(base, *options, "rev-parse", "--absolute-git-dir")
+    if top.returncode or target_dir.returncode:
+        return None, None
+    repo = Path(git_record(top.stdout)).resolve()
+    discovered = git(repo, "rev-parse", "--absolute-git-dir")
+    if discovered.returncode or git_record(discovered.stdout) != git_record(target_dir.stdout):
+        return None, "분리된 --git-dir/--work-tree 구성은 검사할 수 없음 — git -C <저장소>로 실행"
+    return repo, None
+
+
+def commit_targets(command: str, cwd: Path) -> list[tuple[Path | None, str | None]]:
+    """Every ``git ... commit`` in the command with its resolved target repo."""
     try:
-        for group in command_groups(tokenize(command)):
-            for part in group:
-                name, args = executable(part)
-                if name == "git" and "commit" in args:
-                    return True
+        groups = command_groups(tokenize(command))
     except ValueError:
-        return bool(re.search(r"\bgit\b.*\bcommit\b", command, re.S))
-    return False
+        if re.search(r"\bgit\b.*\bcommit\b", command, re.S):
+            return [(repository(cwd), None)]
+        return []
+    targets: list[tuple[Path | None, str | None]] = []
+    for group in groups:
+        for part in group:
+            name, args = executable(part)
+            if name == "git" and git_subcommand(args)[0] == "commit":
+                targets.append(resolve_commit_target(cwd, args))
+    return targets
+
+
+def commit_violations(repo: Path) -> list[str]:
+    return staged_violations(repo, managed=kit_managed(repo))
 
 
 def emit_block(context: str, violations: list[str], agent: bool = False) -> int:
@@ -345,7 +439,7 @@ def agent_hook() -> int:
     if event == "Stop":
         if data.get("stop_hook_active") or repo is None:
             return 0
-        violations = staged_violations(repo)
+        violations = commit_violations(repo)
         return emit_block("agent Stop", violations, agent=True) if violations else 0
     if event == "PreToolUse" and data.get("tool_name") in {"Bash", "shell", "exec_command"}:
         tool_input = data.get("tool_input") or {}
@@ -353,12 +447,14 @@ def agent_hook() -> int:
         reasons = dangerous(command)
         if reasons:
             return emit_block("agent command", reasons, agent=True)
-        if mentions_git_commit(command):
-            if repo is None:
+        for target, problem in commit_targets(command, cwd):
+            if problem:
+                return emit_block("agent commit", [problem], agent=True)
+            if target is None:
                 return emit_block("agent commit", ["Git worktree를 찾을 수 없음"], agent=True)
-            violations = staged_violations(repo)
+            violations = commit_violations(target)
             if violations:
-                return emit_block("agent commit", violations, agent=True)
+                return emit_block("agent commit", [f"[{target}] {item}" for item in violations], agent=True)
     return 0
 
 
