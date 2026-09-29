@@ -2113,6 +2113,37 @@ class AgentPayloadTests(RepositoryFixture):
         rules = (ROOT / "payload/runtime/AGENT-RULES.md").read_text(encoding="utf-8")
         self.assertIn("명령 timeout 안에 끝나야 한다", rules)
 
+    def test_review_killer_supports_external_bot_mode(self) -> None:
+        killer = self.read_agent_body("review-killer")
+        for token in (
+            # 머지 OK 신호를 내지 않는 리뷰어의 수렴 판정과 보고 문구
+            "외부 리뷰봇 모드",
+            "Blocker 0 + Major 0 + **새로운 실질 지적 0**",
+            "3라운드 이상",
+            "머지 OK 신호 아님",
+            # 재리뷰 트리거 선택
+            "`reply-comment`",
+            "`push-only`",
+            "push하지\n  않으면 다음 라운드가 오지 않는다",
+            # 리뷰어 구성
+            "명시했을 때만",
+            "통합 대응 코멘트",
+            "사람 코멘트는 라운드가 아니다",
+            # 오탐 처리
+            "pulls/<n>/files",
+            "실재하는지 확인한다",
+            "등급 상향만으로는 새 근거가 아니다",
+            "반박을 철회할 줄 안다",
+            "본문을 먼저 갱신",
+        ):
+            self.assertIn(token, killer)
+        reviewer = self.read_agent_body("reviewer")
+        self.assertIn("오탐을 만들지 않는다", reviewer)
+        self.assertIn("그것은\n     대응이 아니다", reviewer)
+        context = (ROOT / "payload/runtime/CONTEXT.md").read_text(encoding="utf-8")
+        for field in ("리뷰어 구성", "재리뷰 트리거", "리뷰봇 식별자"):
+            self.assertIn(f"- {field} (review-killer용):", context)
+
     def test_installed_rules_cover_qa_evidence_and_isolated_browser(self) -> None:
         assert_ok(self, self.bootstrap())
         rules = (self.repo / ".agent-project-kit/AGENT-RULES.md").read_text(

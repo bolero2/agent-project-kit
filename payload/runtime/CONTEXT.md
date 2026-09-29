@@ -55,7 +55,9 @@
 - QA 방법 (Agent용): TBD
 - QA 증거 수준 (Agent용): TBD — 기본: 스크린샷 필수(첨부 불가 시 텍스트 증거 + `스크린샷 첨부 불가: <사유>`)
 - QA 기준 예시 링크 (Agent용): TBD
-- 리뷰봇 식별자 (review-killer용): TBD — 상대가 킷 리뷰 Agent면 `pr-review-state`
+- 리뷰어 구성 (review-killer용): TBD — 기본 리뷰어 1개(봇 또는 킷 리뷰 Agent). 추가 Agent 리뷰어는 요청에서 명시할 때만
+- 재리뷰 트리거 (review-killer용): TBD — `reply-comment`(대응 코멘트로 깸) | `push-only`(push로만 깸, 수동 재실행 수단이 있으면 함께 기록)
+- 리뷰봇 식별자 (review-killer용): TBD — 새 항목 분류용(작성자·마커). 머지 OK 신호 발행 여부도 적는다. 상대가 킷 리뷰 Agent면 `pr-review-state`
 - Jira 보드/담당자 (developer용): TBD
 - commit/PR 승인 게이트 (developer용): 활성
 - 킷 저장소 경로: TBD
