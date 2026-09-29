@@ -48,6 +48,8 @@
 
 - 목표: TBD
 - 선언된 Agent 도구: Claude Code, Codex
+- 사용자 소통 언어: TBD — 사용자와의 대화·보고 언어(코드·로그 인용은 원문)
+- 수정 금지 경로 (Agent용): TBD — 읽기만 하는 경로. 원인이 여기 있으면 보고만
 - 실행/테스트 앵커: TBD
 - 중요한 경로: TBD
 - 보안/데이터 경계: TBD
@@ -60,6 +62,7 @@
 - 리뷰봇 식별자 (review-killer용): TBD — 새 항목 분류용(작성자·마커). 머지 OK 신호 발행 여부도 적는다. 상대가 킷 리뷰 Agent면 `pr-review-state`
 - Jira 보드/담당자 (developer용): TBD
 - commit/PR 승인 게이트 (developer용): 활성
+- developer 폴링 간격 (developer용): 30초
 - 킷 저장소 경로: TBD
 - 킷 업데이트 마지막 확인: TBD
 

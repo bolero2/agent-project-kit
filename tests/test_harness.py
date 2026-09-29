@@ -2113,6 +2113,45 @@ class AgentPayloadTests(RepositoryFixture):
         rules = (ROOT / "payload/runtime/AGENT-RULES.md").read_text(encoding="utf-8")
         self.assertIn("명령 timeout 안에 끝나야 한다", rules)
 
+    def test_agent_rules_cover_behavior_principles(self) -> None:
+        rules = (ROOT / "payload/runtime/AGENT-RULES.md").read_text(encoding="utf-8")
+        for token in (
+            # 자기 재검증·정정
+            "## 자기 재검증과 정정",
+            "보고도 그대로 믿지 않고",
+            "취소선",
+            "재발 방지책",
+            # 모호함·설명·언어
+            "배경·선택지·추천",
+            "질문 지점에서 멈추고 질문으로 반환한다",
+            "**먼저 설명**",
+            "`사용자 소통 언어`",
+            "`수정 금지 경로`",
+            # Git
+            "머지할지 묻지도",
+            "amend·rebase하지 않는다",
+            # 셸·도구
+            "## 셸·도구 사용",
+            "`cd`로 바꾸지 않는다",
+            "`mktemp -d`",
+            "`== 1` 단언",
+            "PYTHONDONTWRITEBYTECODE=1",
+            "무관한\n  hunk는 되돌린다",
+            "grep -F -f",
+            "docker compose config",
+            # QA 6번째 기준과 공유 브라우저
+            "품질 기준 6가지",
+            "`<details>`",
+            "현재 URL을 확인한다",
+        ):
+            self.assertIn(token, rules)
+        context = (ROOT / "payload/runtime/CONTEXT.md").read_text(encoding="utf-8")
+        for field in ("사용자 소통 언어", "수정 금지 경로", "developer 폴링 간격"):
+            self.assertIn(f"- {field}", context)
+        developer = self.read_agent_body("developer")
+        self.assertIn("`developer 폴링 간격`", developer)
+        self.assertNotIn("sleep 30", developer)
+
     def test_review_killer_supports_external_bot_mode(self) -> None:
         killer = self.read_agent_body("review-killer")
         for token in (
