@@ -2085,6 +2085,51 @@ class AgentPayloadTests(RepositoryFixture):
         ):
             self.assertIn(token, rules)
 
+    def test_installed_rules_cover_qa_evidence_and_isolated_browser(self) -> None:
+        assert_ok(self, self.bootstrap())
+        rules = (self.repo / ".agent-project-kit/AGENT-RULES.md").read_text(
+            encoding="utf-8"
+        )
+        qa = rules.split("## QA 규칙", 1)[1].split("## 문서 갱신과 lock", 1)[0]
+        # "어느 것에도 해당하지 않으면" 문장은 docker/Python 조건 바로 뒤에 있어야 한다.
+        method = qa.split("### QA 증거", 1)[0]
+        self.assertIn("Python 프로젝트면 pytest", method)
+        self.assertIn("어느 것에도 해당하지 않으면", method)
+        for token in (
+            "PR을 만들 때는 항상",
+            "정상 경로와 주요 실패 경로",
+            "실제 화면 캡처",
+            "텍스트와 이미지 둘 다",
+            "항목 = 값 (해석)",
+            "input/output",
+            "+Ns",
+            "presigned 서명",
+            "이미지를 저장소에 커밋하지 않는다",
+            "스크린샷 첨부 불가: <사유>",
+        ):
+            self.assertIn(token, qa)
+        browser = rules.split("## 브라우저 작업과 사용자 도움", 1)[1]
+        for token in (
+            "분리된 브라우저에서만",
+            "사용자가 쓰고 있는 브라우저",
+            "2FA",
+            "CAPTCHA",
+            "그 브라우저 창에 로그인해 달라고",
+            "비밀번호·토큰을 대신 입력하지 않는다",
+            "멈추고 질문으로",
+        ):
+            self.assertIn(token, browser)
+        context = (self.repo / ".agent-project-kit/CONTEXT.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("QA 증거 수준", context)
+        self.assertIn("QA 기준 예시 링크", context)
+        for rendered in (
+            self.repo / ".claude/agents/review-killer.md",
+            self.repo / ".codex/agents/review-killer.toml",
+        ):
+            self.assertIn("### QA 증거", rendered.read_text(encoding="utf-8"))
+
 
 class LiteModeTests(unittest.TestCase):
     def setUp(self) -> None:

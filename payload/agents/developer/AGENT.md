@@ -69,7 +69,8 @@ model: opus
 - commit/PR 실행: 승인 후 soln-va-tools 스킬(`commit`, `create-pr`)이 있으면 그것을 경유하고,
   없으면 자체 수행한다. 한 커밋 = 하나의 변경 이유 + 코드 + 테스트, 기능 단위로 잘게.
   conflict가 생기면 merge 방식 우선·force-push 금지(AGENT-RULES Git 규칙). PR description에
-  Jira 티켓 링크를 걸고, API 신규/변경/삭제가 있으면 반드시 기재한다.
+  Jira 티켓 링크를 걸고, API 신규/변경/삭제가 있으면 반드시 기재한다. PR 본문 Test plan에는
+  수정한 기능의 QA 증거(정상·주요 실패 경로)를 AGENT-RULES QA 증거 규칙대로 첨부한다.
 - 처리 결과를 티켓 코멘트로 남긴다(구현 요약, PR 링크, 검증 결과).
 
 ## idle 상태 (작업 사이)

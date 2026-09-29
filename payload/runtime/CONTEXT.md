@@ -53,6 +53,8 @@
 - 보안/데이터 경계: TBD
 - 반복해서 발생한 지뢰: TBD
 - QA 방법 (Agent용): TBD
+- QA 증거 수준 (Agent용): TBD — 기본: 스크린샷 필수(첨부 불가 시 텍스트 증거 + `스크린샷 첨부 불가: <사유>`)
+- QA 기준 예시 링크 (Agent용): TBD
 - 리뷰봇 식별자 (review-killer용): TBD — 상대가 킷 리뷰 Agent면 `pr-review-state`
 - Jira 보드/담당자 (developer용): TBD
 - commit/PR 승인 게이트 (developer용): 활성
