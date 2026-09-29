@@ -168,18 +168,32 @@ Verdict: changes requested (Blocker 1, Major 4, Minor 2)
 끝내는 것은 이 Agent의 대표적인 실패 동작이다. `verdict=changes-requested` 상태에서의 종료는
 아래 "종료 판정"의 예외 3가지에 해당할 때만 허용된다.
 
-- 한 사이클은 30초 간격 × 30회(약 15분)다. 신호는 **head sha 변경**(신규 커밋) 또는
-  **자신의 마커가 없는 코멘트 증가**(대응 측 반박·보류·완료 통보) 중 먼저 오는 쪽이다.
-- 대기는 **감지 시 즉시 끝나는 blocking 스크립트를 한 번의 Bash 호출**로 실행한다
-  (AGENT-RULES 대기·폴링 규칙). 회차마다 turn을 끝내거나 "커밋이 올라오면 알려주세요"라고
-  사용자에게 돌아가는 것은 실패 동작이다. 골격(PR 여러 개를 한 루프에서 감시):
+- **한 사이클 = 한 번의 blocking 명령 호출이며, 호스트 도구의 명령 timeout 안에 반드시 끝나야
+  한다.** 예: Claude Code의 Bash 도구는 한 호출 상한이 600초라 그보다 길게 잡으면 호출이 강제
+  종료되고 감지 결과를 잃는다. 사이클은 약 9분 이하로 잡고, 기본값은 **30초 간격 × 15회**다.
+  PR이 여러 개면 회차당 API 호출이 늘어나므로 회차 수를 줄여 상한 안에 맞춘다.
+- 사이클이 끝나면 **turn을 끝내지 않고** 다음 호출로 바로 이어간다(AGENT-RULES 대기·폴링 규칙).
+  회차마다 turn을 끝내거나 "커밋이 올라오면 알려주세요"라고 사용자에게 돌아가는 것은 실패 동작이다.
+- 신호는 다음 중 먼저 오는 쪽이다: **head sha 변경**(신규 커밋), **전체 개수 증가**(PR issue
+  코멘트 + PR review 코멘트 + review 제출의 합 — 마커·작성자로 걸러 세지 않는다), **충돌·CI 상태
+  변화**(`mergeable`/`mergeStateStatus`, `gh pr checks`). 사이클 기준값은 자기 코멘트를 게시한
+  **뒤에** 잡으므로 자기 코멘트는 신호가 되지 않는다. 증가를 감지한 뒤 새 항목을 읽고 분류한다.
+  골격(PR 여러 개를 한 루프에서 감시):
 
   ```bash
-  PRS="174 175"   # 대상 PR 번호. 타 저장소면 gh에 --repo <owner>/<repo>를 붙인다
-  snap() { gh pr view "$1" --json headRefOid,comments --jq \
-    '"\(.headRefOid) \([.comments[]|select((.body|contains("pr-review-state"))|not)]|length)"'; }
+  PRS="174 175"; R=<owner>/<repo>
+  sum() { gh api "$1" --paginate --jq 'length' | awk '{s+=$1} END{print s+0}'; }
+  snap() {
+    meta=$(gh pr view "$1" --repo $R --json headRefOid,mergeable,mergeStateStatus \
+      --jq '"\(.headRefOid) \(.mergeable)/\(.mergeStateStatus)"')
+    ci=$(gh pr checks "$1" --repo $R --json bucket \
+      --jq 'map(.bucket)|group_by(.)|map("\(.[0])=\(length)")|join(",")' 2>/dev/null)
+    n=$(( $(sum "repos/$R/issues/$1/comments") + $(sum "repos/$R/pulls/$1/comments") \
+      + $(sum "repos/$R/pulls/$1/reviews") ))
+    echo "$meta ci=$ci n=$n"
+  }
   for pr in $PRS; do eval "before_$pr=\"$(snap "$pr")\""; done
-  for i in $(seq 1 30); do
+  for i in $(seq 1 15); do
     sleep 30
     for pr in $PRS; do
       now="$(snap "$pr")"

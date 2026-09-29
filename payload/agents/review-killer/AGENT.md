@@ -91,32 +91,46 @@ GitHub의 `mergeable=MERGEABLE` / `mergeStateStatus=CLEAN`은 **"base 브랜치�
 **대응 코멘트를 남긴 뒤에는 반드시 폴링으로 돌아간다.** 한 라운드를 처리하고 사용자에게
 보고하며 turn을 끝내는 것은 이 Agent의 대표적인 실패 동작이다.
 
-- 한 사이클은 30초 간격 × 30회(약 15분)다. 리뷰 코멘트 **개수 증가**를 신호로 쓴다.
-- 대기는 **감지 시 즉시 끝나는 blocking 스크립트를 한 번의 Bash 호출**로 실행한다
-  (AGENT-RULES 대기·폴링 규칙). 회차마다 turn을 끝내거나 "리뷰가 올라오면 알려주세요"라고
-  사용자에게 돌아가는 것은 실패 동작이다. 골격:
+- **한 사이클 = 한 번의 blocking 명령 호출이며, 호스트 도구의 명령 timeout 안에 반드시 끝나야
+  한다.** 예: Claude Code의 Bash 도구는 한 호출 상한이 600초라 그보다 길게 잡으면 호출이 강제
+  종료되고 그 사이의 감지 결과·출력을 통째로 잃는다. 사이클은 약 9분 이하로 잡고, 기본값은
+  **30초 간격 × 15회**(API 호출 오버헤드 포함 약 8~9분)다. 다른 도구는 그 도구의 상한에 맞춘다.
+- 사이클이 끝나면 **turn을 끝내지 않고** 다음 호출로 바로 이어간다(AGENT-RULES 대기·폴링 규칙).
+  회차마다 turn을 끝내거나 "리뷰가 올라오면 알려주세요"라고 사용자에게 돌아가는 것은 실패 동작이다.
+- **새 리뷰 신호는 전체 개수 증가다**: PR issue 코멘트 + PR review(라인) 코멘트 + review 제출의
+  합. 특정 마커·작성자로 걸러 세지 않는다 — 리뷰가 예상과 다른 작성자·형식(사람 계정, 마커 없는
+  코멘트, 라인 코멘트만 있는 review)으로 올라오면 필터된 개수는 영원히 0이라 폴링이 헛돈다.
+  증가를 감지한 **뒤에** 새 항목을 읽고 리뷰인지, 자기 대응 코멘트인지, 사람 코멘트인지 분류한다.
+- 매 회차 blocker를 함께 본다: `mergeable`/`mergeStateStatus`(충돌), `gh pr checks`(CI 실패).
+  골격:
 
   ```bash
-  MARK='<리뷰봇 식별자>'   # 킷 리뷰 Agent면 pr-review-state
-  count() { gh pr view $PR --json comments --jq \
-    "[.comments[]|select(.body|contains(\"$MARK\"))]|length"; }
-  before=$(count)
-  for i in $(seq 1 30); do
+  PR=<번호>; R=<owner>/<repo>
+  sum() { gh api "$1" --paginate --jq 'length' | awk '{s+=$1} END{print s+0}'; }
+  total() { echo $(( $(sum "repos/$R/issues/$PR/comments") \
+    + $(sum "repos/$R/pulls/$PR/comments") + $(sum "repos/$R/pulls/$PR/reviews") )); }
+  fails() { gh pr checks $PR --repo $R --json bucket \
+    --jq '[.[]|select(.bucket=="fail")]|length' 2>/dev/null || echo 0; }
+  before=$(total); fail_before=$(fails)
+  for i in $(seq 1 15); do
     sleep 30
-    state=$(gh pr view $PR --json mergeable,mergeStateStatus \
+    state=$(gh pr view $PR --repo $R --json mergeable,mergeStateStatus \
       --jq '"\(.mergeable)/\(.mergeStateStatus)"')
     case "$state" in *CONFLICTING*|*DIRTY*) echo "BLOCKER: $state"; exit 0;; esac
-    now=$(count)
-    if [ -n "$now" ] && [ "$now" -gt "$before" ]; then echo "NEW_REVIEW"; exit 0; fi
+    f=$(fails); if [ "$f" -gt "$fail_before" ]; then echo "BLOCKER: CI fail=$f"; exit 0; fi
+    now=$(total)
+    if [ -n "$now" ] && [ "$now" -gt "$before" ]; then echo "NEW_ACTIVITY $before -> $now"; exit 0; fi
   done
   echo "NO_CHANGE"
   ```
 
+  사이클 시작 시점에 이미 실패 중인 CI는 사이클 전에 처리한다(진입 전 점검). 그 실패가 PR 범위
+  밖이라 고칠 수 없으면 대응 코멘트의 보류 절에 근거와 함께 남긴다.
 - **`NO_CHANGE`는 종료 사유가 아니다.** 사이클이 무변화로 끝나면 PR 상태(코멘트, CI, 충돌)를
   한 번 재점검하고 **다음 사이클로 재진입한다.** 사용자에게 중간 보고하지 않는다.
 - 무변화가 길어져도 상한 없이 계속 폴링한다. 세션이 살아 있는 한 완주가 기본값이다.
-- 매 회차 blocker를 동시 감시한다: `mergeable`/`mergeStateStatus`, CI 실패·pending,
-  리뷰 워크플로 자체의 실패. blocker 감지 시 폴링을 멈추고 해소 → 재검증 → push → 폴링 재개.
+- blocker(충돌, CI 실패·pending 장기화, 리뷰 워크플로 자체의 실패)를 감지하면 폴링을 멈추고
+  해소 → 재검증 → push → 폴링 재개. 충돌·CI 실패 상태에서는 리뷰가 올라오지 않을 수 있다.
 - 컨텍스트 한도가 가까워지면 HANDOFF에 PR 번호·라운드·미해소 지적을 남기고 재가동을 요청한다.
 
 ## 리뷰 처리

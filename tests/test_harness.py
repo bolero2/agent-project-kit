@@ -4,6 +4,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -2084,6 +2085,33 @@ class AgentPayloadTests(RepositoryFixture):
             "상위 모델로 재가동",
         ):
             self.assertIn(token, rules)
+
+    def polling_script(self, name: str) -> str:
+        body = self.read_agent_body(name)
+        section = body.split("## 폴링 루프", 1)[1].split("\n## ", 1)[0]
+        script = section.split("```bash\n", 1)[1].split("```", 1)[0]
+        return re.sub(r"<[^<>\n]+>", "x", script)
+
+    def test_polling_cycle_fits_tool_timeout_and_counts_all_activity(self) -> None:
+        for name in ("reviewer", "review-killer"):
+            with self.subTest(agent=name):
+                script = self.polling_script(name)
+                result = run("bash", "-n", input_bytes=script.encode("utf-8"))
+                assert_ok(self, result)
+                rounds = int(re.search(r"seq 1 (\d+)", script).group(1))
+                interval = int(re.search(r"sleep (\d+)", script).group(1))
+                # 한 호출이 호스트 명령 timeout(예: 600초) 안에 끝나도록 약 9분 이하.
+                self.assertLessEqual(rounds * interval, 540)
+                # 신호는 마커 필터가 아니라 전체 개수(issue/review 코멘트 + review 제출).
+                self.assertIn("/issues/", script)
+                self.assertRegex(script, r"pulls/\$\w+/comments")
+                self.assertRegex(script, r"pulls/\$\w+/reviews")
+                self.assertNotIn("contains(", script)
+                # 매 회차 충돌과 CI를 함께 본다.
+                self.assertIn("mergeable", script)
+                self.assertIn("gh pr checks", script)
+        rules = (ROOT / "payload/runtime/AGENT-RULES.md").read_text(encoding="utf-8")
+        self.assertIn("명령 timeout 안에 끝나야 한다", rules)
 
     def test_installed_rules_cover_qa_evidence_and_isolated_browser(self) -> None:
         assert_ok(self, self.bootstrap())

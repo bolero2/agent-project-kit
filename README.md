@@ -283,7 +283,7 @@ worktree scope를 명시한 뒤 linked worktree에 설치할 수 있다. 설치 
 
 | Agent | 트리거 예시 | 하는 일 |
 |---|---|---|
-| `review-killer` | "PR #111 리뷰 처리해줘" | 리뷰 모니터링(30초×30회 사이클, 무변화면 재진입)·blocker 동시 감시·Blocker/Major 처리(수정/반박/보류)·라운드당 코멘트 1건·리뷰 측의 머지 OK 신호를 확인해야만 종료(merge는 하지 않음) |
+| `review-killer` | "PR #111 리뷰 처리해줘" | 리뷰 모니터링(30초×15회 사이클 — 한 호출이 도구 timeout 안에 끝남, 신호는 코멘트·리뷰 전체 개수 증가, 무변화면 재진입)·blocker 동시 감시·Blocker/Major 처리(수정/반박/보류)·라운드당 코멘트 1건·리뷰 측의 머지 OK 신호를 확인해야만 종료(merge는 하지 않음) |
 | `reviewer` | "이 PR 리뷰하고 결과는 코멘트로 작성하라", "재리뷰 진행해" | PR diff·CI를 읽고 Blocker/Major/Minor 등급 리뷰를 PR 코멘트 1건으로 게시·신규 커밋과 대응 코멘트를 폴링해 재리뷰·체크리스트 7개를 전부 충족해야 `ready to merge` 판정 (읽기 전용 — 코드 수정·merge·approve 없음) |
 | `developer` | "작업 시작하자", "Agent와 개발 진행할래" | Jira 보드에서 담당 티켓 선정·잠금 코멘트·구현·테스트/QA 후 **승인 게이트를 거쳐** commit/PR·티켓 이동 |
 
