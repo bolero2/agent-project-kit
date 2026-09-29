@@ -1965,6 +1965,23 @@ class SchemaHistoryTests(unittest.TestCase):
         rules = (ROOT / "payload/runtime/AGENT-RULES.md").read_text(encoding="utf-8")
         self.assertIn("agent-kit-qa-evidence", rules)
 
+    def test_payload_has_no_project_specific_traces(self) -> None:
+        # 킷은 특정 프로젝트·계정·플러그인 이름에 묶이지 않는다. 프로젝트 고유 규칙은
+        # 설치된 CONTEXT의 필드(예: 워크플로 스킬)에 둔다.
+        pattern = re.compile(
+            r"DF-\d|DF-X|soln-|dataforge|\bnota\b|dc-noh|jira-qa-ticket"
+        )
+        for path in sorted((ROOT / "payload").rglob("*")):
+            if path.is_file() and "__pycache__" not in path.parts:
+                text = path.read_text(encoding="utf-8")
+                with self.subTest(path=str(path.relative_to(ROOT))):
+                    self.assertIsNone(pattern.search(text))
+        context = (ROOT / "payload/runtime/CONTEXT.md").read_text(encoding="utf-8")
+        self.assertIn("- 워크플로 스킬 (커밋·PR·브랜치):", context)
+        self.assertIn("비어 있으면 기본 동작", context)
+        rules = (ROOT / "payload/runtime/AGENT-RULES.md").read_text(encoding="utf-8")
+        self.assertIn("`워크플로 스킬 (커밋·PR·브랜치)`", rules)
+
     def test_claude_template_is_pointer_only(self) -> None:
         text = (ROOT / "payload/templates/CLAUDE.template.md").read_text(
             encoding="utf-8"

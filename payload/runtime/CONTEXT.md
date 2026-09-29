@@ -61,6 +61,7 @@
 - 재리뷰 트리거 (review-killer용): TBD — `reply-comment`(대응 코멘트로 깸) | `push-only`(push로만 깸, 수동 재실행 수단이 있으면 함께 기록)
 - 리뷰봇 식별자 (review-killer용): TBD — 새 항목 분류용(작성자·마커). 머지 OK 신호 발행 여부도 적는다. 상대가 킷 리뷰 Agent면 `pr-review-state`
 - Jira 보드/담당자 (developer용): TBD
+- 워크플로 스킬 (커밋·PR·브랜치): TBD — 경유할 스킬 이름과 스킬별 세부 규칙. 비어 있으면 기본 동작(직접 git/gh + 초안 승인 게이트)
 - commit/PR 승인 게이트 (developer용): 활성
 - developer 폴링 간격 (developer용): 30초
 - 킷 저장소 경로: TBD
