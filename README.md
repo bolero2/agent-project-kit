@@ -15,6 +15,7 @@ Claude Code와 Codex가 같은 프로젝트에서 교대 작업할 수 있게 �
 | PR 리뷰 자동 처리(대응) | `review-killer` Agent — "PR #N 리뷰 처리해줘" |
 | PR 리뷰 자동 수행 | `reviewer` Agent — "이 PR 리뷰하고 결과는 코멘트로 작성하라" |
 | Jira 티켓 자동 개발 | `developer` Agent — "작업 시작하자" |
+| PR에 QA 증거(스크린샷) 첨부 | `agent-kit-qa-evidence` — 분리된 브라우저로 캡처·업로드, 없으면 텍스트 폴백 |
 | 상태 진단 / 제거 | `--doctor` / `--uninstall` |
 
 설치된 규칙·스킬·handoff·훅은 대상 프로젝트에서만 작동하며, 정상적인
@@ -132,6 +133,7 @@ symlink가 있으면 덮어쓰지 않고 설치 전에 실패한다.
 | 이어받은 세션 시작 | "HANDOFF 확인하고 이어서 해 줘" (Claude Code는 자동 로드, 명시하면 더 확실) |
 | 킷 업데이트 확인 | "agent-kit-update 스킬로 킷 업데이트 확인해 줘" (하루 1회는 자동 확인) |
 | Jira 티켓 만들기 | "지라 티켓 만들어줘" / "QA 결과 지라에 올려줘" (초안 승인 후에만 생성) |
+| QA 증거 첨부 | "agent-kit-qa-evidence 스킬로 이 PR에 QA 스크린샷 올려줘" |
 
 Agent는 트리거 문구로만 가동되고, 모호하면 반드시 질문하며 답을 받을 때까지 대기한다.
 developer Agent의 commit/PR은 초안 승인 게이트를 거친다. 상세 계약은 설치된
@@ -274,6 +276,7 @@ worktree scope를 명시한 뒤 linked worktree에 설치할 수 있다. 설치 
 | `agent-kit-wrap-up` | 세션/마일스톤 종료 | 완료 이력을 압축하고 검증·미완료 작업·다음 행동을 현행화 |
 | `agent-kit-skill-sync` | 사용자 스킬 생성·수정·삭제 | 선언된 모든 Agent 도구 경로에 동일 원본으로 반영하고 동작 검증 후 산출물 정리 |
 | `agent-kit-update` | 세션당 1회 자동 + 수동 요청 | 설치 버전과 GitHub 원본 버전을 비교하고, 승인 하에 킷 pull + 재설치로 업데이트 |
+| `agent-kit-qa-evidence` | PR 생성·리뷰 대응에서 QA를 근거로 쓸 때 | 단계·시각·명령·입출력 증거 페이지 작성 → 분리된 브라우저로 요소 캡처 → 코멘트 상자 파일 업로드로 `user-attachments` URL만 얻고(게시 안 함) → `gh … --body-file` 게시 → `naturalWidth` 검증. 마스킹 체크리스트, 브라우저 없으면 `스크린샷 첨부 불가: <사유>` 폴백 |
 | `agent-kit-jira-ticket` | QA/개발 중 결함·할 일 발견 시 | 증거 기반 FE/BE/FS 판정 → 템플릿 초안 → **승인 후에만** Jira 티켓 생성 (동목적 마켓플레이스 스킬이 있으면 그것을 우선) |
 
 두 provider 디렉터리의 스킬은 같은 payload에서 복사되고 테스트로 parity를 확인한다. 기본

@@ -26,6 +26,7 @@ SKILL_NAMES = (
     "skill-sync",
     "update",
     "jira-ticket",
+    "qa-evidence",
 )
 AGENT_NAMES = ("developer", "review-killer", "reviewer")
 OWNED_PATHS = (
@@ -1828,6 +1829,35 @@ class SchemaHistoryTests(unittest.TestCase):
         for token in ("병합", "AGENTS.md", "승인"):
             self.assertIn(token, adopt)
 
+    def test_qa_evidence_skill_covers_capture_upload_and_fallback(self) -> None:
+        text = (ROOT / "payload/skills/agent-kit-qa-evidence/SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        for token in (
+            "--directory",
+            "--bind 127.0.0.1",
+            "분리된 브라우저",
+            "자기 탭을 새로 연다",
+            "현재 URL을 확인",
+            "user-attachments",
+            "게시 버튼을 누르지 않는다",
+            "textarea를 비운다",
+            "--body-file",
+            "naturalWidth",
+            "마스킹 체크리스트",
+            "presigned",
+            "스크린샷 첨부 불가: <사유>",
+            "사용자 브라우저를 대신 쓰지 않는다",
+            "멈추고 질문으로 반환한다",
+            "<details>",
+        ):
+            self.assertIn(token, text)
+        # 세션 cwd를 바꾸는 cd·강제 삭제를 절차에 넣지 않는다.
+        self.assertNotRegex(text, r"(?m)(^\s*|[;&|]\s*)cd\s")
+        self.assertNotIn("rm -rf", text)
+        rules = (ROOT / "payload/runtime/AGENT-RULES.md").read_text(encoding="utf-8")
+        self.assertIn("agent-kit-qa-evidence", rules)
+
     def test_claude_template_is_pointer_only(self) -> None:
         text = (ROOT / "payload/templates/CLAUDE.template.md").read_text(
             encoding="utf-8"
@@ -1844,6 +1874,8 @@ class SchemaMigrationTests(RepositoryFixture):
             legacy_kit / "payload",
             ignore=shutil.ignore_patterns("__pycache__", ".DS_Store"),
         )
+        if version < 7:
+            shutil.rmtree(legacy_kit / "payload/skills/agent-kit-qa-evidence")
         if version < 6:
             shutil.rmtree(legacy_kit / "payload/agents/reviewer")
         if version < 5:
@@ -1902,6 +1934,41 @@ class SchemaMigrationTests(RepositoryFixture):
         self.install_legacy_v1()
         assert_ok(self, self.bootstrap("--uninstall"))
         for rel in kit_core.owned_paths(1):
+            self.assertFalse((self.repo / rel).exists(), rel)
+        self.assertFalse(manifest_path(self.repo).exists())
+
+    def test_v6_install_upgrades_to_current_schema_with_qa_evidence_skill(
+        self,
+    ) -> None:
+        before = status(self.repo)
+        self.install_legacy(6)
+        for provider in (".claude", ".agents"):
+            self.assertFalse(
+                (self.repo / f"{provider}/skills/agent-kit-qa-evidence/SKILL.md").exists()
+            )
+        self.assertTrue((self.repo / ".claude/agents/reviewer.md").is_file())
+
+        assert_ok(self, self.bootstrap())
+
+        manifest = json.loads(manifest_path(self.repo).read_text(encoding="utf-8"))
+        self.assertEqual(manifest["schema_version"], kit_core.SCHEMA_VERSION)
+        for rel in OWNED_PATHS:
+            self.assertTrue((self.repo / rel).is_file(), rel)
+        left = self.repo / ".agents/skills/agent-kit-qa-evidence/SKILL.md"
+        right = self.repo / ".claude/skills/agent-kit-qa-evidence/SKILL.md"
+        self.assertEqual(left.read_bytes(), right.read_bytes())
+        exclude = git_common_dir(self.repo) / "info/exclude"
+        data = exclude.read_bytes()
+        self.assertEqual(data.count(kit_core.BLOCK_START.encode("utf-8")), 1)
+        self.assertIn(b"/.claude/skills/agent-kit-qa-evidence/", data)
+        self.assertIn(b"/.agents/skills/agent-kit-qa-evidence/", data)
+        self.assertEqual(status(self.repo), before)
+        assert_ok(self, self.bootstrap("--doctor"))
+
+    def test_v6_install_is_uninstallable_directly_with_current_kit(self) -> None:
+        self.install_legacy(6)
+        assert_ok(self, self.bootstrap("--uninstall"))
+        for rel in kit_core.owned_paths(6):
             self.assertFalse((self.repo / rel).exists(), rel)
         self.assertFalse(manifest_path(self.repo).exists())
 

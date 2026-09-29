@@ -196,6 +196,10 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
   jira-ticket 스킬 시나리오 J 실측, **1.7.0 수정본으로 시나리오 K 재검증**(15분 무변화 후
   재진입, 1라운드 조기 종료 재발 여부, 판정 어휘 분리)과 review-killer ↔ reviewer 짝짓기
   (시나리오 L) 실측
+- [x] 2026-09-29 실사용 규칙 일반화 반영(kit 1.7.1~1.9.0): QA 증거·분리 브라우저, 폴링 사이클·
+  전체 개수 신호, 외부 리뷰봇 모드, 행동 원칙, `agent-kit-qa-evidence` 스킬(schema v7)
+- [ ] 남은 smoke test: 시나리오 M(qa-evidence — 분리된 브라우저 업로드 경로 실측), 외부 리뷰봇
+  상대 review-killer 수렴 판정 재검증
 - 릴리스 단계에서 repository-local `bolero2` author로 `master`에 commit/push하고 CI를 확인한다.
 
 ## 9. 환경
